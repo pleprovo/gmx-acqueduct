@@ -100,7 +100,7 @@ WaterNetwork::initAnalysis(const gmx::TrajectoryAnalysisSettings &settings,
     nb_.setCutoff(cutoff_);
 
     /* Set the number of column to store time dependent data */
-    data_.setColumnCount(0, 5);
+    data_.setColumnCount(0, 3);
 
     /* Init the average module  */ 
     avem_.reset(new gmx::AnalysisDataAverageModule());
@@ -130,50 +130,75 @@ WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
 
     /* Get water Position and indices */
     gmx::ConstArrayRef<rvec> waterCoordinates = watersel.coordinates();
-    
-    std::vector<rvec> oxygenVector(waterCoordinates.size()/3);
-    for (unsigned int i = 0; i < waterCoordinates.size(); i += 3) {
-	copy_rvec(waterCoordinates.at(i), oxygenVector.at(i/3));
-    }
-    gmx::ConstArrayRef<rvec> oxygenCoordinates(oxygenVector);
-
-    std::vector<rvec> hydrogenVector(2*waterCoordinates.size()/3);
-    for (unsigned int i = 0; i < waterCoordinates.size(); i += 3) {
-	copy_rvec(waterCoordinates.at(i+1), hydrogenVector.at(i/3));
-	copy_rvec(waterCoordinates.at(i+2), hydrogenVector.at((i+1)/3));
-    }
-    gmx::ConstArrayRef<rvec> hydrogenCoordinates(hydrogenVector);
-    
     gmx::ConstArrayRef<int> waterMappedIds = watersel.mappedIds();
 
+    /* Separate Oxygen coordinates and hydrogen coordinates */
+    /* Get their indices */
+    std::vector<rvec> oxygenVector(waterCoordinates.size()/3);
+    std::vector<rvec> hydrogenVector(2*(waterCoordinates.size()/3));
     std::vector<int> oxygenIndices, hydrogenIndices;
-    for (unsigned int i = 0; i < watersel.posCount()/3; i++) {
-	oxygenIndices.push_back(3*i);
-	hydrogenIndices.push_back(3*i+1);
-	hydrogenIndices.push_back(3*i+2);
+    
+    for (unsigned int i = 0; i < oxygenVector.size(); i++) {
+    	copy_rvec(waterCoordinates.at(3*i), oxygenVector.at(i));
+    	copy_rvec(waterCoordinates.at(3*i+1), hydrogenVector.at(2*i));
+    	copy_rvec(waterCoordinates.at(3*i+2), hydrogenVector.at(2*i+1));
+    	oxygenIndices.push_back(3*i);
+    	hydrogenIndices.push_back(3*i+1);
+    	hydrogenIndices.push_back(3*i+2);
     }
+    
+    gmx::ConstArrayRef<rvec> oxygenCoordinates(oxygenVector);
+    gmx::ConstArrayRef<rvec> hydrogenCoordinates(hydrogenVector);
     gmx::ConstArrayRef<int> oxygenIds(oxygenIndices);
     gmx::ConstArrayRef<int> hydrogenIds(hydrogenIndices);
+      
+    /* 
+       In house Modules Initialization 
+    */
     
-    /* Modules Init */
     if (frnr == 0) {
-	this->dipoleModule_->initialise(waterCoordinates);
-	//this->lifetimeModule_->initialise(nb_frames, waterCoordinates.size()/3)
+    	this->dipoleModule_->initialise(waterCoordinates);
+    	//this->lifetimeModule_->initialise(nb_frames, waterCoordinates.size()/3)
     }
 
-    /* Dipoles Stuff */
-
-    this->dipoleModule_->analyseFrame(waterCoordinates);
     
-    /* Graph Stuff */
+    /* 
+       Dipoles Stuff 
+    */
+    
+    this->dipoleModule_->analyseFrame(waterCoordinates);
+
+    
+    /* 
+       Alpha Shape stuff 
+    */
+    
+    /* Convert the position into cgal Point */
+    /* Compute the alpha shape for alpha bal of 1.0 nm */
+    std::vector<int> buriedWaterVector;
+    if (true) {
+    	gmx::ConstArrayRef<rvec> alphaCoordinates = alphasel.coordinates();
+    	std::vector<Point_3> alphaPoints = fromGmxtoCgalPosition<Point_3>(alphaCoordinates);
+    	std::vector<Point_3> waterPoints = fromGmxtoCgalPosition<Point_3>(oxygenCoordinates);
+
+    	alphaShapeModule_->build(alphaPoints, 1.0);    
+    	buriedWaterVector = alphaShapeModule_->locate(waterPoints, TRUE);
+	
+    }
+
+    
+    /* 
+       Graph Stuff 
+    */
+    
     /* Build set of H--O pairs */
     std::set<Edge, edge_comparator> edgeSet;
     gmx::AnalysisNeighborhoodPositions waterPos(watersel);
     /*
     gmx::AnalysisNeighborhoodPositions oxygenPos(oxygenCoordinates.data(),
-						 oxygenCoordinates.size());
+    						 oxygenCoordinates.size());
     gmx::AnalysisNeighborhoodPositions hydrogenPos(hydrogenCoordinates.data(),
-						   hydrogenCoordinates.size());
+    						   hydrogenCoordinates.size());
     */
     gmx::AnalysisNeighborhoodPositions oxygenPos = waterPos.indexed(oxygenIds);
     gmx::AnalysisNeighborhoodPositions hydrogenPos = waterPos.indexed(hydrogenIds);
@@ -183,16 +208,19 @@ WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
 
     while (pairSearch.findNextPair(&pair))
     {
-	if (norm(pair.dx()) > 0.12) {
-	    edgeSet.insert(Edge(pair.refIndex(), pair.testIndex()));
-	}
+    	if (norm(pair.dx()) > 0.12) {
+    	    edgeSet.insert(Edge(pair.refIndex(), pair.testIndex()));
+    	}
     }
     
     std::vector<Edge> edgeVector(edgeSet.begin(), edgeSet.end());
+
     Graph g(edgeVector.begin(), edgeVector.end(), oxygenCoordinates.size());
     
     /* Get connected components and compute their dipoles moment orientation */
+    
     /* Size distribution in bulk and buried waters */
+    
     /* Dipoles distribution in bulk and buried waters */
 
     /* Component analysis */
@@ -201,31 +229,18 @@ WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
     /* Motif and invariant search in connected components */
 
 
-    /* Analysis of grpah in the alpha shape */
-    /* Alpha Shape stuff */
-    /* Convert the position into cgal Point */
-    /* Compute the alpha shape for alpha bal of 1.0 nm */
-    std::vector<int> buriedWaterVector;
-    if (true) {
-	gmx::ConstArrayRef<rvec> alphaCoordinates = alphasel.coordinates();
-	std::vector<Point_3> alphaPoints = fromGmxtoCgalPosition<Point_3>(alphaCoordinates);
-	std::vector<Point_3> waterPoints = fromGmxtoCgalPosition<Point_3>(oxygenCoordinates);
-
-	alphaShapeModule_->build(alphaPoints, 1.0);
-    
-	buriedWaterVector = alphaShapeModule_->locate(waterPoints, TRUE);
-    }
-
     /* Eigen value spectra analysis */
     
-    /* Data Point Storage Stuff */
+    
+    /* 
+       Data Point Storage Stuff 
+    */
+    
     dh.startFrame(frnr, fr.time);
     dh.setPoint(0, buriedWaterVector.size());
-    dh.setPoint(1, averageDegree(g));
-    dh.setPoint(2, boost::num_vertices(components.at(1)));
-    dh.setPoint
+    dh.setPoint(1, edgeSet.size());
+    dh.setPoint(2, 0.0);
     dh.finishFrame();
-    
 }
 
 

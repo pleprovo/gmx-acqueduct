@@ -68,9 +68,9 @@ public:
     void build(const std::vector<Point_3> &pointVector, const float &alpha);
     void update(const std::vector<Point_3> &pointVector);
 
-    // Special function
+    // Special functions
     std::vector<int> locate(const std::vector<Point_3> &pointVector, const bool &location) const;
-    
+  
     // Accessors 
     float volume();    
     void writeOFF(std::string &outputString);
