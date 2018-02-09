@@ -82,7 +82,7 @@ WaterNetwork::initOptions(gmx::Options                    *options,
 		       .description("Groups to calculate graph properties (default Water)"));
 
     options->addOption(gmx::DoubleOption("cutoff").store(&cutoff_)
-		       .description("Cutoff for distance calculation (default 0.3)"));
+		       .description("Cutoff for distance calculation (default 0.25 nm)"));
 
     settings->setFlag(gmx::TrajectoryAnalysisSettings::efRequireTop);
     settings->setFlag(gmx::TrajectoryAnalysisSettings::efUseTopX);
@@ -130,25 +130,20 @@ WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
 
     /* Get water Position and indices */
     gmx::ConstArrayRef<rvec> waterCoordinates = watersel.coordinates();
-    gmx::ConstArrayRef<int> waterMappedIds = watersel.mappedIds();
 
     /* Separate Oxygen coordinates and hydrogen coordinates */
     /* Get their indices */
     std::vector<rvec> oxygenVector(waterCoordinates.size()/3);
-    std::vector<rvec> hydrogenVector(2*(waterCoordinates.size()/3));
     std::vector<int> oxygenIndices, hydrogenIndices;
     
     for (unsigned int i = 0; i < oxygenVector.size(); i++) {
     	copy_rvec(waterCoordinates.at(3*i), oxygenVector.at(i));
-    	copy_rvec(waterCoordinates.at(3*i+1), hydrogenVector.at(2*i));
-    	copy_rvec(waterCoordinates.at(3*i+2), hydrogenVector.at(2*i+1));
     	oxygenIndices.push_back(3*i);
     	hydrogenIndices.push_back(3*i+1);
     	hydrogenIndices.push_back(3*i+2);
     }
     
     gmx::ConstArrayRef<rvec> oxygenCoordinates(oxygenVector);
-    gmx::ConstArrayRef<rvec> hydrogenCoordinates(hydrogenVector);
     gmx::ConstArrayRef<int> oxygenIds(oxygenIndices);
     gmx::ConstArrayRef<int> hydrogenIds(hydrogenIndices);
       
@@ -176,7 +171,7 @@ WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
     /* Convert the position into cgal Point */
     /* Compute the alpha shape for alpha bal of 1.0 nm */
     std::vector<int> buriedWaterVector;
-    if (true) {
+    if (false) {
     	gmx::ConstArrayRef<rvec> alphaCoordinates = alphasel.coordinates();
     	std::vector<Point_3> alphaPoints = fromGmxtoCgalPosition<Point_3>(alphaCoordinates);
     	std::vector<Point_3> waterPoints = fromGmxtoCgalPosition<Point_3>(oxygenCoordinates);
@@ -216,12 +211,6 @@ WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
     std::vector<Edge> edgeVector(edgeSet.begin(), edgeSet.end());
 
     Graph g(edgeVector.begin(), edgeVector.end(), oxygenCoordinates.size());
-    
-    /* Get connected components and compute their dipoles moment orientation */
-    
-    /* Size distribution in bulk and buried waters */
-    
-    /* Dipoles distribution in bulk and buried waters */
 
     /* Component analysis */
     std::vector<ComponentGraph> components = connected_components_subgraphs(g);
@@ -235,11 +224,13 @@ WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
     /* 
        Data Point Storage Stuff 
     */
+
+    double averageEdgeNb = edgeSet.size()/(waterCoordinates.size()/3.0);
     
     dh.startFrame(frnr, fr.time);
-    dh.setPoint(0, buriedWaterVector.size());
-    dh.setPoint(1, edgeSet.size());
-    dh.setPoint(2, 0.0);
+    dh.setPoint(0, averageEdgeNb);
+    dh.setPoint(1, buriedWaterVector.size());
+    dh.setPoint(2, components.size());
     dh.finishFrame();
 }
 
