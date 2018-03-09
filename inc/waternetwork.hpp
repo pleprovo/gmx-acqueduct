@@ -71,6 +71,8 @@ private:
     
     gmx::Selection                   alphasel_;
     gmx::Selection                   watersel_;
+    gmx::Selection                   sourcesel_;
+    gmx::Selection                   sinksel_;
     
     gmx::AnalysisNeighborhood             nb_;
     
@@ -79,7 +81,6 @@ private:
 
     // Customs Modules
     std::shared_ptr<AlphaShapeModule> alphaShapeModule_;
-    std::shared_ptr<GraphModule>      graphModule_;
     std::shared_ptr<DipoleModule>     dipoleModule_;
     std::shared_ptr<LifetimeModule>   lifetimeModule_;
 

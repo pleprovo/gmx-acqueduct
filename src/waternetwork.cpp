@@ -2,9 +2,19 @@
 
 #include "waternetwork.hpp"
 #include "gromacs/pbcutil/pbc.h"
+#include <iostream>
+#include <fstream>
+
+#include <boost/graph/boykov_kolmogorov_max_flow.hpp>
+#include <boost/graph/push_relabel_max_flow.hpp>
+#include <boost/graph/edmonds_karp_max_flow.hpp>
+
+#include <limits>
 
 
 using Edge = std::pair<int, int>;
+
+using HydrogenBond = std::pair<std::pair<int, int>, float>;
 
 // Convert position from Gmx to CGAL type
 template <class T>
@@ -32,15 +42,86 @@ struct edge_comparator {
     std::less<std::pair<int, int> > less_comparator;
 };
 
+void checkPair(const gmx::AnalysisNeighborhoodPair &pair,
+	       const gmx::Selection &waterSelection,
+	       const gmx::ConstArrayRef<int> &mappedIds,
+	       std::vector<Edge> &edgeVector,
+	       const float &cutOffDistance = 0.35,
+	       const float &cutOffAngle = 0.52) {
+    rvec DH1, DH2;
+    real angle1, angle2;
+    real r_AD = norm(pair.dx());
+    //if ( r_AD <= cutOffDistance ) {
+	if (pair.refIndex() != pair.testIndex()) {
+	    rvec_sub(waterSelection.position(mappedIds.at(pair.testIndex())+1).x(),
+		     waterSelection.position(mappedIds.at(pair.testIndex())).x(),
+		     DH1);
+	    angle1 = gmx_angle(DH1, pair.dx());
+	    if ( angle1 <= cutOffAngle ) {
+		edgeVector.push_back(Edge(pair.refIndex(), pair.testIndex()));
+	    }
+	
+	    rvec_sub(waterSelection.position(mappedIds.at(pair.testIndex())+2).x(),
+		     waterSelection.position(mappedIds.at(pair.testIndex())).x(),
+		     DH2);
+	    angle2 = gmx_angle(DH2, pair.dx());
+	    if ( angle2 <= cutOffAngle ) {
+		edgeVector.push_back(Edge(pair.refIndex(), pair.testIndex()));
+	    } 
+	}
+	//}
+}
+
+void checkHB(const gmx::AnalysisNeighborhoodPair &pair,
+	       const gmx::Selection &waterSelection,
+	       const gmx::ConstArrayRef<int> &mappedIds,
+	       std::vector<HydrogenBond> &edgeVector,
+	       const float &cutOffDistance = 0.35,
+	       const float &cutOffAngle = 0.52) {
+    rvec DH1, DH2;
+    float energy_hb;
+    /* Value for the hb potential that lead to average ~20kJ.mol-1*/
+    float A = 0.0435; /* epsilon*sigma^6*sqrt(2/3) */
+    float B = 0.5335; /* epsilon*sigma^4*sqrt(2/3) */
+    real angle1, angle2;
+    real r_AD = norm(pair.dx());
+    HydrogenBond out;
+    //if ( r_AD <= cutOffDistance ) {
+	if (pair.refIndex() != pair.testIndex()) {
+	    rvec_sub(waterSelection.position(mappedIds.at(pair.testIndex())+1).x(),
+		     waterSelection.position(mappedIds.at(pair.testIndex())).x(),
+		     DH1);
+	    angle1 = gmx_angle(DH1, pair.dx());
+	    if ( angle1 <= cutOffAngle ) {
+		energy_hb = ((A/pow(r_AD, 6.0))-(B/pow(r_AD, 4.0)))*pow(cos(angle1), 4.0);
+		out.first.first = pair.refIndex();
+		out.first.second = pair.testIndex();
+		out.second = energy_hb;
+		edgeVector.push_back(out);
+	    }
+	
+	    rvec_sub(waterSelection.position(mappedIds.at(pair.testIndex())+2).x(),
+		     waterSelection.position(mappedIds.at(pair.testIndex())).x(),
+		     DH2);
+	    angle2 = gmx_angle(DH2, pair.dx());
+	    if ( angle2 <= cutOffAngle ) {
+		energy_hb = ((A/pow(r_AD, 6.0))-(B/pow(r_AD, 4.0)))*pow(cos(angle1), 4.0);
+		out.first.first = pair.refIndex();
+		out.first.second = pair.testIndex();
+		out.second = energy_hb;
+		edgeVector.push_back(out);
+	    } 
+	}
+	//}
+}
 
 WaterNetwork::WaterNetwork()
     : TrajectoryAnalysisModule("waternetwork", "Water network analysis tool"),
-      cutoff_(0.25)
+      cutoff_(0.35)
 {
     registerAnalysisDataset(&data_, "avedist");
 
     alphaShapeModule_ = std::make_shared<AlphaShapeModule>();
-    graphModule_      = std::make_shared<GraphModule>();
     dipoleModule_     = std::make_shared<DipoleModule>();
     lifetimeModule_   = std::make_shared<LifetimeModule>();
 }
@@ -80,7 +161,16 @@ WaterNetwork::initOptions(gmx::Options                    *options,
 		       .store(&watersel_).required()
 		       .defaultSelectionText("Water")
 		       .description("Groups to calculate graph properties (default Water)"));
+    
+    // Source and sink option
+    options->addOption(gmx::SelectionOption("source")
+		       .store(&sourcesel_)
+		       .description("Define a group as a source for maximum flow analysis, must be used with -sink option"));
 
+    options->addOption(gmx::SelectionOption("sink")
+		       .store(&sinksel_)
+		       .description("Define a group as a sink for maximum flow analysis, must be used with -source option"));
+    
     options->addOption(gmx::DoubleOption("cutoff").store(&cutoff_)
 		       .description("Cutoff for distance calculation (default 0.25 nm)"));
 
@@ -125,6 +215,8 @@ WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
 			   gmx::TrajectoryAnalysisModuleData *pdata)
 {
     gmx::AnalysisDataHandle         dh     = pdata->dataHandle(data_);
+    const gmx::Selection           &sourcesel = pdata->parallelSelection(sourcesel_);
+    const gmx::Selection           &sinksel = pdata->parallelSelection(sinksel_);
     const gmx::Selection           &alphasel = pdata->parallelSelection(alphasel_);
     const gmx::Selection           &watersel = pdata->parallelSelection(watersel_);
 
@@ -186,51 +278,109 @@ WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
        Graph Stuff 
     */
     
-    /* Build set of H--O pairs */
-    std::set<Edge, edge_comparator> edgeSet;
+    /* Find all hydrogen bonds */
+    gmx::AnalysisNeighborhoodPositions sourcePos(sourcesel);
+    gmx::AnalysisNeighborhoodPositions sinkPos(sinksel);
     gmx::AnalysisNeighborhoodPositions waterPos(watersel);
-    /*
-    gmx::AnalysisNeighborhoodPositions oxygenPos(oxygenCoordinates.data(),
-    						 oxygenCoordinates.size());
-    gmx::AnalysisNeighborhoodPositions hydrogenPos(hydrogenCoordinates.data(),
-    						   hydrogenCoordinates.size());
-    */
     gmx::AnalysisNeighborhoodPositions oxygenPos = waterPos.indexed(oxygenIds);
-    gmx::AnalysisNeighborhoodPositions hydrogenPos = waterPos.indexed(hydrogenIds);
-    gmx::AnalysisNeighborhoodSearch search = nb_.initSearch(pbc, hydrogenPos);
+    
+    gmx::AnalysisNeighborhoodSearch search = nb_.initSearch(pbc, oxygenPos);
+    
+    gmx::AnalysisNeighborhoodPairSearch pairSearchSource = search.startPairSearch(sourcePos);
+    gmx::AnalysisNeighborhoodPairSearch pairSearchSink = search.startPairSearch(sinkPos);
     gmx::AnalysisNeighborhoodPairSearch pairSearch = search.startPairSearch(oxygenPos);
+    
     gmx::AnalysisNeighborhoodPair pair;
+    
+    std::vector<Edge> edgeVector;
+    std::vector<HydrogenBond> HBVector;
+    while (pairSearch.findNextPair(&pair)) {
+	checkPair(pair, watersel, oxygenIds, edgeVector);
+	checkHB(pair, watersel, oxygenIds, HBVector);
+    }
 
-    while (pairSearch.findNextPair(&pair))
-    {
-    	if (norm(pair.dx()) > 0.12) {
-    	    edgeSet.insert(Edge(pair.refIndex(), pair.testIndex()));
-    	}
+    std::set<int> sourceEdges;
+    while (pairSearchSource.findNextPair(&pair)) {
+	sourceEdges.insert(pair.refIndex());
     }
     
-    std::vector<Edge> edgeVector(edgeSet.begin(), edgeSet.end());
-
-    Graph g(edgeVector.begin(), edgeVector.end(), oxygenCoordinates.size());
-
+    std::set<int> sinkEdges;
+    while (pairSearchSink.findNextPair(&pair)) {
+	sinkEdges.insert(pair.refIndex());
+    }
+    
+    float flow = 0.0;
+    
+    Graph g(oxygenIndices.size()+2);
+    std::vector<edge_descriptor> reverseEdges;
+    std::vector<float> capacity;
+    
+    for (auto hb : HBVector) {
+	// edge_descriptor e1 = add_edge(hb.first.first, hb.first.second, g).first;
+	// edge_descriptor e2 = add_edge(hb.first.second, hb.first.first, g).first;
+	// put(boost::edge_capacity, g, e1, hb.second);
+	// put(boost::edge_capacity, g, e2, hb.second);
+	AddBidirectionalEdge(g, hb.first.first, hb.first.second, hb.second,
+			     reverseEdges, capacity);
+    }
+    
+    for (auto source : sourceEdges) {
+	// edge_descriptor e1 = add_edge(oxygenIndices.size(), source, g).first;
+	// edge_descriptor e2 = add_edge(source, s, g).first;
+	// put(boost::edge_capacity, g, e1, std::numeric_limits<double>::infinity());
+	// put(boost::edge_capacity, g, e2, std::numeric_limits<double>::infinity());
+    }
+	
+    for (auto sink : sinkEdges) {
+	// edge_descriptor e1 = add_edge(oxygenIndices.size()+1, sink, g).first;
+	// edge_descriptor e2 = add_edge(sink, t, g).first;
+	// put(boost::edge_capacity, g, e1, std::numeric_limits<double>::infinity());
+	// put(boost::edge_capacity, g, e2, std::numeric_limits<double>::infinity());
+    }
+    int sourceId = 0;
+    int sinkId = 1000;
+    vertex_descriptor s = vertex(sourceId, g);
+    vertex_descriptor t = vertex(sinkId, g);
+    
+    //flow = boykov_kolmogorov_max_flow(g, s, t);
+    //Graph g(edgeVector.begin(), edgeVector.end(), oxygenCoordinates.size());
+    //DiGraph dg(edgeVector.begin(), edgeVector.end(), oxygenCoordinates.size());
+    
     /* Component analysis */
-    std::vector<ComponentGraph> components = connected_components_subgraphs(g);
+    //std::vector<ComponentGraph> components = connected_components_subgraphs(g);
     
     /* Motif and invariant search in connected components */
 
-
     /* Eigen value spectra analysis */
     
+    /* Maximum Flow analysis between the sink and the source */
     
-    /* 
-       Data Point Storage Stuff 
+    /*
+      Hydrogen Bonds Energy
     */
-
-    double averageEdgeNb = edgeSet.size()/(waterCoordinates.size()/3.0);
+    float E = 0.0;
+    for (auto hb: HBVector) {
+	E += hb.second;
+    }
+    
+    // Write graphml frame
+    // Get all properties in dynamics properties
+    
+    // if ( frnr == 0) {
+    // 	boost::dynamic_properties dp;
+    // 	dp.property("vertex_index", get(boost::vertex_index_t(), dg));
+    // 	dp.property("edge_index", get(boost::edge_index_t(), dg));
+    // 	std::ofstream outFile("plop.dat");
+    // 	std::stringstream oss;
+    // 	write_graphml(oss, dg, dp, true);
+    //     outFile << oss.str();
+    // 	outFile.close();
+    // }
     
     dh.startFrame(frnr, fr.time);
-    dh.setPoint(0, averageEdgeNb);
-    dh.setPoint(1, buriedWaterVector.size());
-    dh.setPoint(2, components.size());
+    dh.setPoint(0, 1.0*num_edges(g)/num_vertices(g));
+    dh.setPoint(1, flow);
+    dh.setPoint(2, 0.0);
     dh.finishFrame();
 }
 
