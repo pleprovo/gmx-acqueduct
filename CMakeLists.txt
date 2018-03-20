@@ -5,7 +5,7 @@ cmake_minimum_required(VERSION 2.8)
 
 project ( waternetwork )
 
-
+set(Boost_USE_MULTITHREADED ON)
 # CGAL and its components
 find_package( CGAL QUIET COMPONENTS  )
 
@@ -49,18 +49,29 @@ gromacs_check_compiler(CXX)
 include_directories(${GROMACS_INCLUDE_DIRS})
 add_definitions(${GROMACS_DEFINITIONS})
 
-set (CMAKE_CXX_FLAGS "-Wall -O2 -std=c++14")
+set (CMAKE_CXX_FLAGS "-Wall -O2 -pg -std=c++14")
 
 # includes and sources
 include_directories(inc)
-file(GLOB SOURCES "src/*.cpp")
+#file(GLOB SOURCES "src/*.cpp")
+
+set( SOURCE_WATERNETWORK src/waternetwork.cpp
+  src/dipole_module.cpp
+  src/graph_module.cpp
+  src/lifetime_module.cpp)
+
+set( SOURCE_ALPHASHAPE src/alphashape.cpp
+  src/alpha_shape_module.cpp)
 
 # Creating entries for all C++ files with "main" routine
 # ##########################################################
 
-add_executable ( waternetwork ${SOURCES})
+add_executable ( waternetwork ${SOURCE_WATERNETWORK})
+add_executable ( alphashape ${SOURCE_ALPHASHAPE})
 
-target_link_libraries( waternetwork ${GROMACS_LIBRARIES}
+target_link_libraries( waternetwork ${GROMACS_LIBRARIES} )
+target_link_libraries( alphashape ${GROMACS_LIBRARIES}
   ${CGAL_LIBRARIES} ${CGAL_3RD_PARTY_LIBRARIES} )
+
 
 
