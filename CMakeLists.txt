@@ -58,7 +58,8 @@ include_directories(inc)
 set( SOURCE_WATERNETWORK src/waternetwork.cpp
   src/dipole_module.cpp
   src/graph_module.cpp
-  src/lifetime_module.cpp)
+  src/lifetime_module.cpp
+  src/alpha_shape_module.cpp)
 
 set( SOURCE_ALPHASHAPE src/alphashape.cpp
   src/alpha_shape_module.cpp)

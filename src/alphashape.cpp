@@ -9,8 +9,8 @@
 // Convert position from Gmx to CGAL type
 template <class T>
 std::vector<T> fromGmxtoCgalPosition(const gmx::ConstArrayRef<rvec> &coordinates,
-				     const int increment=1) {
-
+				     const int increment=1)
+{
     std::vector<T> cgalPositionVector;   
     for (unsigned int i = 0; i < coordinates.size(); i += increment) {
 	cgalPositionVector.push_back(T(coordinates.at(i)[XX],
@@ -23,11 +23,10 @@ std::vector<T> fromGmxtoCgalPosition(const gmx::ConstArrayRef<rvec> &coordinates
 
 struct edge_comparator {
     bool operator()(const std::pair<int, int> &a,
-                    const std::pair<int, int> &b) const
-	{
-	    return less_comparator(std::minmax(a.first, a.second),
-				   std::minmax(b.first, b.second));
-	}
+                    const std::pair<int, int> &b) const {
+	return less_comparator(std::minmax(a.first, a.second),
+			       std::minmax(b.first, b.second));
+    }
 
     std::less<std::pair<int, int> > less_comparator;
 };
@@ -36,13 +35,12 @@ struct edge_comparator {
 AlphaShape::AlphaShape()
     : TrajectoryAnalysisModule("AlphaShape", "Protein Surface analysis")
 {
-    registerAnalysisDataset(&data_, "avedist");
+    registerAnalysisDataset(&data_, "avepop");
 
     alphaShapeModule_ = std::make_shared<AlphaShapeModule>();
 }
 
-void
-AlphaShape::initOptions(gmx::Options                    *options,
+void AlphaShape::initOptions(gmx::Options                    *options,
 			gmx::TrajectoryAnalysisSettings *settings)
 {
     static const char *const desc[] = {
@@ -65,12 +63,17 @@ AlphaShape::initOptions(gmx::Options                    *options,
 
     options->addOption(gmx::FileNameOption("o")
 		       .filetype(gmx::eftPlot).outputFile()
-		       .store(&fnDist_).defaultBasename("avedist")
+		       .store(&fnPopulation_).defaultBasename("alpha-stats")
 		       .description("Collection of analysis properties through time"));
-
+    
+    options->addOption(gmx::FileNameOption("os")
+		       .filetype(gmx::eftUnknown).outputFile()
+	               .store(&fnSurface_).defaultBasename("surface.off")
+		       .description("Write the OFF file of the last alpha shape"));
+    
     options->addOption(gmx::SelectionOption("reference")
 		       .store(&alphasel_).required()
-		       .defaultSelectionText("Calpha")
+		       /*.defaultSelectionText("Calpha")*/
 		       .description("Reference group to calculate alpha shape (default C-alphas)"));
     options->addOption(gmx::SelectionOption("select")
 		       .store(&watersel_).required()
@@ -82,8 +85,7 @@ AlphaShape::initOptions(gmx::Options                    *options,
 }
 
 
-void
-AlphaShape::initAnalysis(const gmx::TrajectoryAnalysisSettings &settings,
+void AlphaShape::initAnalysis(const gmx::TrajectoryAnalysisSettings &settings,
 			 const gmx::TopologyInformation        &top)
 {
     /* Init Selection */
@@ -97,11 +99,10 @@ AlphaShape::initAnalysis(const gmx::TrajectoryAnalysisSettings &settings,
     data_.addModule(avem_);
 
     /* Init the Plot module for the time dependent data */
-    if (!fnDist_.empty())
-    {
+    if (!fnPopulation_.empty()) {
 	gmx::AnalysisDataPlotModulePointer plotm(
 	    new gmx::AnalysisDataPlotModule(settings.plotSettings()));
-        plotm->setFileName(fnDist_);
+        plotm->setFileName(fnPopulation_);
         plotm->setTitle("Average distance");
         plotm->setXAxisIsTime();
         plotm->setYLabel("Distance (nm)");
@@ -110,8 +111,7 @@ AlphaShape::initAnalysis(const gmx::TrajectoryAnalysisSettings &settings,
 }
 
 
-void
-AlphaShape::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
+void AlphaShape::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
 			   gmx::TrajectoryAnalysisModuleData *pdata)
 {
     gmx::AnalysisDataHandle         dh     = pdata->dataHandle(data_);
@@ -130,9 +130,22 @@ AlphaShape::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
     std::vector<int> buriedWaterVector;
 
     /* Alpha shape computation */
-    alphaShapeModule_->build(alphaPoints, 1.0);    
+    alphaShapeModule_->build(alphaPoints, 3.0);    
     buriedWaterVector = alphaShapeModule_->locate(waterPoints, TRUE);
 
+    if (frnr == 1) {
+	std::string outputString;
+	alphaShapeModule_->writeOff(outputString);
+	// std::ofstream out(fnSurface_);
+	// out << outputString;
+	// out.close();
+	
+	std::ofstream OutFile;
+	OutFile.open(fnSurface_, std::ios::out | std::ios::binary);
+	OutFile.write( (char*)&outputString, sizeof(outputString));
+	OutFile.close();
+    }
+    
     /* Store the output */
     dh.startFrame(frnr, fr.time);
     dh.setPoint(0, alphaShapeModule_->volume());
@@ -143,21 +156,18 @@ AlphaShape::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
 }
 
 
-void
-AlphaShape::finishAnalysis(int /*nframes*/)
+void AlphaShape::finishAnalysis(int /*nframes*/)
 {
 
 }
 
 
-void
-AlphaShape::writeOutput()
+void AlphaShape::writeOutput()
 {
 
 }
 
-int
-main(int argc, char *argv[])
+int main(int argc, char *argv[])
 {
     return gmx::TrajectoryAnalysisCommandLineRunner::runAsMain<AlphaShape>(argc, argv);
 }

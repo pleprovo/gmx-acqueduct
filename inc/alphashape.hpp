@@ -63,7 +63,8 @@ public:
 private:
     class ModuleData;
     
-    std::string                      fnDist_;
+    std::string                      fnPopulation_;
+    std::string                      fnSurface_;
     
     gmx::Selection                   alphasel_;
     gmx::Selection                   watersel_;

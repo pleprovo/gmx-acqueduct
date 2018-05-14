@@ -44,7 +44,7 @@ typedef CGAL::Triangulation_data_structure_3<Vbi>                   Tdsi;
 typedef CGAL::Delaunay_triangulation_3<K, Tdsi>                     Delaunay_3;
 typedef Delaunay_3::Point                                           Point;
 
-using Edge = std::pair<int, int>;
+using Edge = std::pair<unsigned int, unsigned int>;
 
 /*!
   * Class that implement the method to find the water inside the protein.
@@ -73,7 +73,7 @@ public:
   
     // Accessors 
     float volume();    
-    void writeOFF(std::string &outputString);
+    void writeOff(std::string &outputString);
     
 };
 

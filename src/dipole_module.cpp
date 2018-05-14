@@ -7,7 +7,8 @@ DipoleModule::DipoleModule() {
 }
 
 
-void DipoleModule::initialise(const gmx::ConstArrayRef<rvec>& waterCoordinates) {
+void DipoleModule::initialise(const gmx::ConstArrayRef<rvec>& waterCoordinates)
+{
     
     this->initDipoles_ = std::vector<rvec>(waterCoordinates.size()/3);
     for (unsigned int i = 0; i < waterCoordinates.size()-3; i += 3) {
@@ -21,7 +22,8 @@ void DipoleModule::initialise(const gmx::ConstArrayRef<rvec>& waterCoordinates) 
 }
 
 
-void DipoleModule::analyseFrame(const gmx::ConstArrayRef<rvec>& waterCoordinates) {
+void DipoleModule::analyseFrame(const gmx::ConstArrayRef<rvec>& waterCoordinates)
+{
     std::vector<real> currentCos(waterCoordinates.size()/3);
     for (unsigned int i = 0; i < waterCoordinates.size()-3; i += 3) {
 	rvec OH1, OH2, mu;
@@ -34,7 +36,8 @@ void DipoleModule::analyseFrame(const gmx::ConstArrayRef<rvec>& waterCoordinates
 }
 
 
-real DipoleModule::averageFrame(const std::vector<int>& selection = std::vector<int>()) {
+real DipoleModule::averageFrame(const std::vector<int>& selection = std::vector<int>())
+{
     if (selection.empty()) {
 	real output = 0.0;
 	std::vector<real> frame = this->dipolesFrames_.back();
@@ -54,7 +57,8 @@ real DipoleModule::averageFrame(const std::vector<int>& selection = std::vector<
 }
 
 
-std::vector<real> DipoleModule::average(const std::vector<int>& selection = std::vector<int>()) {
+std::vector<real> DipoleModule::average(const std::vector<int>& selection = std::vector<int>())
+{
     if (selection.empty()) {
 	std::vector<real> output;
 	for (auto &frame : dipolesFrames_) {

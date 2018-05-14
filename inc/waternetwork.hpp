@@ -36,6 +36,7 @@
 #include <string>
 #include <vector>
 
+#include "alpha_shape_module.hpp"
 #include "graph_module.hpp"
 #include "dipole_module.hpp"
 #include "lifetime_module.hpp"
@@ -58,7 +59,6 @@ public:
 
     virtual void analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
 			      gmx::TrajectoryAnalysisModuleData *pdata);
-
     virtual void finishAnalysis(int nframes);
     virtual void writeOutput();
 
@@ -71,6 +71,7 @@ private:
     gmx::Selection                   watersel_;
     gmx::Selection                   sourcesel_;
     gmx::Selection                   sinksel_;
+    gmx::Selection                   alphasel_;
     
     gmx::AnalysisNeighborhood             nb_;
     
@@ -78,12 +79,15 @@ private:
     gmx::AnalysisDataAverageModulePointer avem_;
 
     // Customs Modules
+    std::shared_ptr<AlphaShapeModule>       alphaShapeModule_;
     std::shared_ptr<DipoleModule>     dipoleModule_;
     std::shared_ptr<LifetimeModule>   lifetimeModule_;
 
+    std::string    graphml_output_;
     double search_time_ = 0.0;
     double graph_time_ = 0.0;
     double analysis_time_ = 0.0;
+    int nb_water_= 0;
 
 };
 

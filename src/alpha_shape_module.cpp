@@ -11,8 +11,8 @@ AlphaShapeModule::AlphaShapeModule() {}
 
 AlphaShapeModule::~AlphaShapeModule() {}
 
-AlphaShapeModule::AlphaShapeModule(const std::vector<Point_3> &pointVector, 
-				   const float &alpha) 
+AlphaShapeModule::AlphaShapeModule(const std::vector<Point_3> &pointVector,
+				   const float &alpha)
 {
     this->build(pointVector, alpha);
 }
@@ -77,7 +77,7 @@ float AlphaShapeModule::volume()
     return volume;
 }
 
-void AlphaShapeModule::writeOFF(std::string &outputString) 
+void AlphaShapeModule::writeOff(std::string &outputString) 
 {
     std::vector<Facet> facets;
     std::stringstream outputStreamPositions;
