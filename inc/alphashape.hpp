@@ -44,6 +44,7 @@
 /*! \brief
  * Template class to serve as a basis for user analysis tools.
  */
+
 class AlphaShape : public gmx::TrajectoryAnalysisModule
 {
 public:
@@ -64,7 +65,7 @@ private:
     class ModuleData;
     
     std::string                      fnPopulation_;
-    std::string                      fnSurface_;
+    std::string                      fnSurface_ = "surface.off";
     
     gmx::Selection                   alphasel_;
     gmx::Selection                   watersel_;
@@ -73,7 +74,7 @@ private:
     gmx::AnalysisDataAverageModulePointer avem_;
 
     // Customs Modules
-    std::shared_ptr<AlphaShapeModule> alphaShapeModule_;
+    std::shared_ptr<AlphaShapeModule> alphaShapeModulePtr_;
 
 };
 

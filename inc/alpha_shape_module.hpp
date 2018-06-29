@@ -13,14 +13,10 @@
 
 #ifndef ALPHASHAPEMODULE_HPP
 #define ALPHASHAPEMODULE_HPP
-#include <boost/iterator/zip_iterator.hpp>
 #include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
-#include <CGAL/Weighted_alpha_shape_euclidean_traits_3.h>
 #include <CGAL/Delaunay_triangulation_3.h>
 #include <CGAL/Alpha_shape_3.h>
 #include <CGAL/Triangulation_hierarchy_3.h>
-
-#include <CGAL/Triangulation_vertex_base_with_info_3.h>
 
 
 // CGAL Kernel
@@ -37,14 +33,6 @@ typedef CGAL::Alpha_shape_3<Delaunay_hierarchy>             Alpha_shape_3;
 typedef Alpha_shape_3::Facet		                    Facet;
 typedef Alpha_shape_3::Classification_type                  Classification;
 typedef K::Point_3					    Point_3;
-typedef K::Tetrahedron_3                                    Tetrahedron_3;
-
-typedef CGAL::Triangulation_vertex_base_with_info_3<int, K>         Vbi;
-typedef CGAL::Triangulation_data_structure_3<Vbi>                   Tdsi;
-typedef CGAL::Delaunay_triangulation_3<K, Tdsi>                     Delaunay_3;
-typedef Delaunay_3::Point                                           Point;
-
-using Edge = std::pair<unsigned int, unsigned int>;
 
 /*!
   * Class that implement the method to find the water inside the protein.

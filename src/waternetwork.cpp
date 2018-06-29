@@ -6,9 +6,7 @@
 #include <iostream>
 #include <fstream>
 #include <limits>
-#include <ctime>
 
-#include "graph_module.hpp"
 
 using Edge = std::pair<unsigned int, unsigned int>;
 
@@ -24,7 +22,6 @@ void checkHB(const gmx::AnalysisNeighborhoodPair &pair,
 {
     rvec DH1, DH2;
     float energy_hb;
-    /* Value for the hb potential that lead to average ~20kJ.mol-1*/
     float C = 3855; /* epsilon*sigma^6*sqrt(2/3) */
     float D = 738; /* epsilon*sigma^4*sqrt(2/3) */
     real angle1, angle2;
@@ -90,19 +87,19 @@ void AddBidirectionalEdge(Graph &graph,
 }
 
 // Convert position from Gmx to CGAL type
-template <class T>
-std::vector<T> fromGmxtoCgalPosition(const gmx::ConstArrayRef<rvec> &coordinates,
-				     const int increment=1)
-{
-    std::vector<T> cgalPositionVector;   
-    for (unsigned int i = 0; i < coordinates.size(); i += increment) {
-	cgalPositionVector.push_back(T(coordinates.at(i)[XX],
-				       coordinates.at(i)[YY],
-				       coordinates.at(i)[ZZ]));
-    }
+// template <class T>
+// std::vector<T> fromGmxtoCgalPosition(const gmx::ConstArrayRef<rvec> &coordinates,
+// 				     const int increment=1)
+// {
+//     std::vector<T> cgalPositionVector;   
+//     for (unsigned int i = 0; i < coordinates.size(); i += increment) {
+// 	cgalPositionVector.push_back(T(coordinates.at(i)[XX],
+// 				       coordinates.at(i)[YY],
+// 				       coordinates.at(i)[ZZ]));
+//     }
     
-    return cgalPositionVector;
-}
+//     return cgalPositionVector;
+// }
 
 template <typename U>
 using Matrix = std::vector<std::vector<U> >;
@@ -147,9 +144,7 @@ WaterNetwork::WaterNetwork()
 {
     registerAnalysisDataset(&data_, "avedist");
 
-    alphaShapeModule_ = std::make_shared<AlphaShapeModule>();
-    dipoleModule_     = std::make_shared<DipoleModule>();
-    lifetimeModule_   = std::make_shared<LifetimeModule>();
+    //graphModulePtr_ = std::make_shared<GraphModule>();
 }
 
 void WaterNetwork::initOptions(gmx::Options                    *options,
@@ -179,22 +174,18 @@ void WaterNetwork::initOptions(gmx::Options                    *options,
 		       .description("Collection of analysis properties through time"));
 
     options->addOption(gmx::SelectionOption("select")
-		       .store(&watersel_).required()
+		       .store(&solvent_).required()
 		       .defaultSelectionText("Water")
 		       .description("Groups to calculate graph properties (default Water)"));
     
     // Source and sink option
     options->addOption(gmx::SelectionOption("source")
-		       .store(&sourcesel_)
+		       .store(&source_)
 		       .description("Define a group as a source for maximum flow analysis, must be used with -sink option"));
 
     options->addOption(gmx::SelectionOption("sink")
-		       .store(&sinksel_)
+		       .store(&sink_)
 		       .description("Define a group as a sink for maximum flow analysis, must be used with -source option"));
-
-    options->addOption(gmx::SelectionOption("alpha")
-		       .store(&alphasel_)
-		       .description("Select a group for alpha shape computation default is C-Alpha"));
     
     options->addOption(gmx::DoubleOption("cutoff").store(&cutoff_)
 		       .description("Cutoff for distance calculation (default 0.25 nm)"));
@@ -209,12 +200,13 @@ void WaterNetwork::initAnalysis(const gmx::TrajectoryAnalysisSettings &settings,
 {
     /* Init Selection */
 
-    watersel_.initOriginalIdsToGroup(top.topology(), INDEX_RES);
-    this->nb_water_ = watersel_.posCount()/3;
+    solvent_.initOriginalIdsToGroup(top.topology(), INDEX_RES);
+    nb_water_ = solvent_.posCount()/3;
     
     /* Init neihborsearch cutoff value */
-    nb_.setCutoff(cutoff_);
-    nb_.setMode(gmx::AnalysisNeighborhood::SearchMode::eSearchMode_Grid);
+    nb1_.setCutoff(cutoff_);
+    nb2_.setCutoff(0.35);
+    nb1_.setMode(gmx::AnalysisNeighborhood::SearchMode::eSearchMode_Grid);
     /* Set the number of column to store time dependent data */
     data_.setColumnCount(0, 3);
 
@@ -240,16 +232,15 @@ WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
 			   gmx::TrajectoryAnalysisModuleData *pdata)
 {
     gmx::AnalysisDataHandle         dh     = pdata->dataHandle(data_);
-    const gmx::Selection           &sourcesel = pdata->parallelSelection(sourcesel_);
-    const gmx::Selection           &sinksel = pdata->parallelSelection(sinksel_);
-    const gmx::Selection           &watersel = pdata->parallelSelection(watersel_);
-    const gmx::Selection           &alphasel = pdata->parallelSelection(alphasel_);
+    const gmx::Selection           &sourcesel = pdata->parallelSelection(source_);
+    const gmx::Selection           &sinksel = pdata->parallelSelection(sink_);
+    const gmx::Selection           &watersel = pdata->parallelSelection(solvent_);
     
     /* Separate Oxygen coordinates and hydrogen coordinates */
     /* Get their indices */
     std::vector<int> oxygenIndices, hydrogenIndices;
 
-    for (int i = 0; i < this->nb_water_; i++) {
+    for (int i = 0; i < nb_water_; i++) {
     	oxygenIndices.push_back(3*i);
     	hydrogenIndices.push_back(3*i+1);
     	hydrogenIndices.push_back(3*i+2);
@@ -257,57 +248,21 @@ WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
     
     gmx::ConstArrayRef<int> oxygenIds(oxygenIndices);
     gmx::ConstArrayRef<int> hydrogenIds(hydrogenIndices);
-      
-    /* 
-       In house Modules Initialization 
-    */
-    
-    if (frnr == 0) {
-    	// this->dipoleModule_->initialise(waterCoordinates);
-    	// this->lifetimeModule_->initialise(nb_frames, this->nb_water_)
-    }
-
-    
-    /* 
-       Dipoles Stuff 
-    */
-    
-    // this->dipoleModule_->analyseFrame(waterCoordinates);
-
-    /*
-      Alpha Shape
-    */
-    
-    // std::vector<int> buriedOxygenIds;
-    // std::vector<int> temp;
-    // if (alphasel_.posCount() != 0) {
-    // 	gmx::ConstArrayRef<rvec> waterCoordinates = watersel.coordinates();
-    // 	gmx::ConstArrayRef<rvec> alphaCoordinates = alphasel.coordinates();
-    // 	std::vector<Point_3> alphaPoints = fromGmxtoCgalPosition<Point_3>(alphaCoordinates);
-    // 	std::vector<Point_3> waterPoints = fromGmxtoCgalPosition<Point_3>(waterCoordinates, 3);
-    // 	alphaShapeModule_->build(alphaPoints, 1.0);
-    //     buriedOxygenIds = alphaShapeModule_->locate(waterPoints, TRUE);
-    // 	for (auto id : buriedOxygenIds) {
-    // 	    temp.push_back(id*3);
-    // 	}	
-    // }
-    // gmx::ConstArrayRef<int> buriedIds(temp);
+       
     /* 
        Graph Stuff 
     */
     
     /* Find all hydrogen bonds */
-    clock_t begin = clock();
     gmx::AnalysisNeighborhoodPositions sourcePos(sourcesel);
     gmx::AnalysisNeighborhoodPositions sinkPos(sinksel);
     gmx::AnalysisNeighborhoodPositions waterPos(watersel);    
     gmx::AnalysisNeighborhoodPositions oxygenPos = waterPos.indexed(oxygenIds);
-    gmx::AnalysisNeighborhoodSearch search = nb_.initSearch(pbc, oxygenPos);
+    
+    gmx::AnalysisNeighborhoodSearch search = nb1_.initSearch(pbc, oxygenPos);
     gmx::AnalysisNeighborhoodPairSearch pairSearch = search.startPairSearch(oxygenPos);
 
-    gmx::AnalysisNeighborhood             nb1;
-    nb1.setCutoff(0.35);
-    gmx::AnalysisNeighborhoodSearch search_close = nb1.initSearch(pbc, oxygenPos);
+    gmx::AnalysisNeighborhoodSearch search_close = nb2_.initSearch(pbc, oxygenPos);
     gmx::AnalysisNeighborhoodPairSearch pairSearchSource = search_close.startPairSearch(sourcePos);
     gmx::AnalysisNeighborhoodPairSearch pairSearchSink = search_close.startPairSearch(sinkPos);
     
@@ -330,9 +285,9 @@ WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
     }
 
     float flow = 0.0;
-    int sourceId = this->nb_water_;
-    int sinkId = this->nb_water_+1;
-    Graph g(this->nb_water_+2);
+    int sourceId = nb_water_;
+    int sinkId = nb_water_+1;
+    Graph g(nb_water_+2);
     std::vector<edge_descriptor> reverseEdges;
     std::vector<float> capacity;
     for (const auto& hb : HBVector) {
@@ -350,13 +305,12 @@ WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
     	AddBidirectionalEdge(g, sinkId, sink, 1000.0, reverseEdges, capacity);
     }
 
-    clock_t top_1 = clock();
-    
+    /*
     gmx::ConstArrayRef<rvec> waterCoordinates = watersel.coordinates();
-    Matrix<float> hbmatrix(this->nb_water_, std::vector<float>(this->nb_water_, 0.0));    
+    Matrix<float> hbmatrix(nb_water_, std::vector<float>(nb_water_, 0.0));    
     hbpotential(waterCoordinates, hbmatrix);
     
-    Graph pot(this->nb_water_+2);
+    Graph pot(nb_water_+2);
     std::vector<edge_descriptor> reverseEdges_pot;
     std::vector<float> capacity_pot;
     for (unsigned int i = 0; i < hbmatrix.size(); i++) {
@@ -372,19 +326,18 @@ WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
     AddBidirectionalEdge(pot, 9, 1, 1000.0, reverseEdges_pot, capacity_pot);
     AddBidirectionalEdge(pot, 10, 8, 1000.0, reverseEdges_pot, capacity_pot);    
     AddBidirectionalEdge(pot, 10, 7, 1000.0, reverseEdges_pot, capacity_pot);
-    
-    
-    clock_t top_2 = clock();
-    
+    */
     vertex_descriptor s = vertex(sourceId, g);
     vertex_descriptor t = vertex(sinkId, g);    
     std::vector<float> residual_capacity(num_edges(g), 0.0);
+    
     flow = boost::boykov_kolmogorov_max_flow(g,
     	   boost::make_iterator_property_map(&capacity[0], get(boost::edge_index, g)),
     	   boost::make_iterator_property_map(&residual_capacity[0], get(boost::edge_index, g)),
     	   boost::make_iterator_property_map(&reverseEdges[0], get(boost::edge_index, g)),
     					     get(boost::vertex_index, g), s, t);
     
+    /*
     vertex_descriptor s_pot = vertex(9, pot);
     vertex_descriptor t_pot = vertex(10, pot);
     std::vector<float> residual_capacity_pot(num_edges(pot), 0.0);
@@ -393,9 +346,7 @@ WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
        boost::make_iterator_property_map(&residual_capacity_pot[0], get(boost::edge_index, pot)),
        boost::make_iterator_property_map(&reverseEdges_pot[0], get(boost::edge_index, pot)),
     					 get(boost::vertex_index, pot), s_pot, t_pot);
-
-    this->search_time_ += double(top_1 - begin) / CLOCKS_PER_SEC;
-    this->graph_time_ += double(top_2 - top_1) / CLOCKS_PER_SEC;
+    */
     /*
     if (frnr == 1) {
 	std::filebuf fb;
@@ -420,10 +371,7 @@ WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
 
 void WaterNetwork::finishAnalysis(int /*nframes*/)
 {
-    double total = this->search_time_ + this->graph_time_ + this-> analysis_time_;
-    std::cout << 100*this->search_time_/total << " / "
-	      << 100*this->graph_time_/total << " / "
-	      << 100*this->analysis_time_/total << std::endl;
+
 }
 
 

@@ -36,10 +36,7 @@
 #include <string>
 #include <vector>
 
-#include "alpha_shape_module.hpp"
 #include "graph_module.hpp"
-#include "dipole_module.hpp"
-#include "lifetime_module.hpp"
 
 #include <gromacs/trajectoryanalysis.h>
 
@@ -47,6 +44,7 @@
 /*! \brief
  * Template class to serve as a basis for user analysis tools.
  */
+
 class WaterNetwork : public gmx::TrajectoryAnalysisModule
 {
 public:
@@ -67,28 +65,20 @@ private:
     
     std::string                      fnDist_;
     double                           cutoff_;
+    int                              nb_water_;
     
-    gmx::Selection                   watersel_;
-    gmx::Selection                   sourcesel_;
-    gmx::Selection                   sinksel_;
-    gmx::Selection                   alphasel_;
+    gmx::Selection                   solvent_;
+    gmx::Selection                   source_;
+    gmx::Selection                   sink_;
     
-    gmx::AnalysisNeighborhood             nb_;
+    gmx::AnalysisNeighborhood             nb1_;
+    gmx::AnalysisNeighborhood             nb2_;
     
-    gmx::AnalysisData                     data_;
+    gmx::AnalysisData                     data_; // Private Data
+    
     gmx::AnalysisDataAverageModulePointer avem_;
 
-    // Customs Modules
-    std::shared_ptr<AlphaShapeModule>       alphaShapeModule_;
-    std::shared_ptr<DipoleModule>     dipoleModule_;
-    std::shared_ptr<LifetimeModule>   lifetimeModule_;
-
-    std::string    graphml_output_;
-    double search_time_ = 0.0;
-    double graph_time_ = 0.0;
-    double analysis_time_ = 0.0;
-    int nb_water_= 0;
-
+    std::shared_ptr<GraphModule>      graphModulePtr_;
 };
 
 

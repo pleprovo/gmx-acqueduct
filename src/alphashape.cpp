@@ -37,7 +37,7 @@ AlphaShape::AlphaShape()
 {
     registerAnalysisDataset(&data_, "avepop");
 
-    alphaShapeModule_ = std::make_shared<AlphaShapeModule>();
+    alphaShapeModulePtr_ = std::make_shared<AlphaShapeModule>();
 }
 
 void AlphaShape::initOptions(gmx::Options                    *options,
@@ -127,19 +127,16 @@ void AlphaShape::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
     std::vector<Point_3> waterPoints = fromGmxtoCgalPosition<Point_3>(waterCoordinates, 3);
 
     /* Vector of buried water */
-    std::vector<int> buriedWaterVector;
+     std::vector<int> buriedWaterVector;
 
     /* Alpha shape computation */
-    alphaShapeModule_->build(alphaPoints, 3.0);    
-    buriedWaterVector = alphaShapeModule_->locate(waterPoints, TRUE);
+    alphaShapeModulePtr_->build(alphaPoints, 3.0);    
+    buriedWaterVector = alphaShapeModulePtr_->locate(waterPoints, TRUE);
 
-    if (frnr == 1) {
+    if (!fnSurface_.empty()) {
 	std::string outputString;
-	alphaShapeModule_->writeOff(outputString);
-	// std::ofstream out(fnSurface_);
-	// out << outputString;
-	// out.close();
-	
+	alphaShapeModulePtr_->writeOff(outputString);
+	//outputString << "\n";
 	std::ofstream OutFile;
 	OutFile.open(fnSurface_, std::ios::out | std::ios::binary);
 	OutFile.write( (char*)&outputString, sizeof(outputString));
@@ -148,11 +145,10 @@ void AlphaShape::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
     
     /* Store the output */
     dh.startFrame(frnr, fr.time);
-    dh.setPoint(0, alphaShapeModule_->volume());
+    dh.setPoint(0, alphaShapeModulePtr_->volume());
     dh.setPoint(1, buriedWaterVector.size());
     dh.setPoint(2, 0.0);
     dh.finishFrame();
-    
 }
 
 

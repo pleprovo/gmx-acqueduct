@@ -20,24 +20,8 @@ AlphaShapeModule::AlphaShapeModule(const std::vector<Point_3> &pointVector,
 void AlphaShapeModule::build(const std::vector<Point_3> &pointVector,
 				       const float &alpha)
 {
-    // std::shared_ptr<Delaunay_hierarchy> delaunayTesselation =
-    // 	std::make_shared<Delaunay_hierarchy>(pointVector.begin(), pointVector.end());
-    // alphaShape_ = std::make_shared<Alpha_shape_3>(*delaunayTesselation);
     alphaShape_ = std::make_shared<Alpha_shape_3>(pointVector.begin(), pointVector.end());
     alphaShape_->set_alpha(alpha);
-}
-
-void AlphaShapeModule::update(const std::vector<Point_3> &pointVector)
-{
-    // // Iterate over alpha shape vertex and update their position
-    // int count=0;
-    // for (Vb::Alpha_shape_vertices_iterator
-    // 	     avit = alphaShape_->alpha_shape_vertices_begin(),
-    // 	     avit_end = alphaShape->alpha_shape_vertices_end();
-    // 	 avit!=avit_end; ++avit)
-    // {
-    // 	count++;
-    // }
 }
 
 std::vector<int> AlphaShapeModule::locate(const std::vector<Point_3> &pointVector, 
@@ -69,8 +53,7 @@ float AlphaShapeModule::volume()
     for(Alpha_shape_3::Finite_cells_iterator it = alphaShape_->finite_cells_begin(); 
 	it != alphaShape_->finite_cells_end(); it++) {
         if(alphaShape_->classify(it)==Alpha_shape_3::INTERIOR) { 
-	    Tetrahedron_3 tetr = alphaShape_->tetrahedron(it);
-	    volume += tetr.volume();
+	    volume += alphaShape_->tetrahedron(it).volume();
 	}
     }
 
@@ -87,8 +70,7 @@ void AlphaShapeModule::writeOff(std::string &outputString)
     alphaShape_->get_alpha_shape_facets(std::back_inserter(facets), Alpha_shape_3::SINGULAR);	
     std::size_t facetsNumber = facets.size();
 
-    outputStreamPositions << "OFF "<< 3*facetsNumber << " " << 
-	facetsNumber << "\n";
+    outputStreamPositions << "OFF "<< 3*facetsNumber << " " << facetsNumber << "\n";
 
     for (std::size_t i=0;i<facetsNumber;i++) { 
 	if ( alphaShape_->classify(facets[i].first)!=Alpha_shape_3::EXTERIOR) { 
