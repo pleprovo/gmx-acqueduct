@@ -28,8 +28,6 @@
 */
 
 #include <boost/graph/boykov_kolmogorov_max_flow.hpp>
-#include <boost/graph/push_relabel_max_flow.hpp>
-#include <boost/graph/edmonds_karp_max_flow.hpp>
 
 #include <boost/graph/depth_first_search.hpp>
 #include <boost/graph/dijkstra_shortest_paths.hpp>
@@ -96,13 +94,12 @@ float averageDegree(T &g) {
 class GraphModule
 {
 public:
-    GraphModule(int n);
-    graph_t get_graph() const;
+    GraphModule();
+    void set_nodes(int n);
     bool add_bidirectional_edge(int, int, const EdgeProperties&);
-    float flow(int, int);
     
 private:
-    std::unique_ptr<graph_t> g_;
+    Graph g_;
 };
 
 

@@ -144,7 +144,7 @@ WaterNetwork::WaterNetwork()
 {
     registerAnalysisDataset(&data_, "avedist");
 
-    //graphModulePtr_ = std::make_shared<GraphModule>();
+    graphModulePtr_ = std::make_shared<GraphModule>();
 }
 
 void WaterNetwork::initOptions(gmx::Options                    *options,
@@ -288,6 +288,8 @@ WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
     int sourceId = nb_water_;
     int sinkId = nb_water_+1;
     Graph g(nb_water_+2);
+    graphModulePtr_->set_nodes(nb_water_+2);
+    
     std::vector<edge_descriptor> reverseEdges;
     std::vector<float> capacity;
     for (const auto& hb : HBVector) {
