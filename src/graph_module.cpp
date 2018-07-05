@@ -1,12 +1,12 @@
 
 #include "graph_module.hpp"
-#include <boost/make_shared.hpp>
-#include <boost/range/iterator_range.hpp>
+// #include <boost/make_shared.hpp>
+// #include <boost/range/iterator_range.hpp>
 
 GraphModule::GraphModule() {
 
 }
-
+/*
 void GraphModule::set_nodes(int n)
 {
     g_ = Graph(n);
@@ -14,15 +14,15 @@ void GraphModule::set_nodes(int n)
 
 bool GraphModule::add_bidirectional_edge(int i, int j, const EdgeProperties& properties)
 {
-    graph_t::edge_descriptor edge;
+    // graph_t::edge_descriptor edge;
     bool inserted = false;
-    Graph plop;
-    boost::tie(edge, inserted) = add_edge(i, j, plop);
-    boost::tie(edge, inserted) = add_edge(j, i, plop);
+    // Graph plop;
+    // boost::tie(edge, inserted) = add_edge(i, j, plop);
+    // boost::tie(edge, inserted) = add_edge(j, i, plop);
 
     return inserted;
 }
-
+*/
 /*
 std::vector<ComponentGraph> connected_components_subgraphs(const Graph &g)
 {

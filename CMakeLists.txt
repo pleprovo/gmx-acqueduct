@@ -33,7 +33,7 @@ list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 # to match.
 option(GMX_DOUBLE "Use double precision" OFF)
 set(GMX_SUFFIX "" CACHE STRING "Suffix for the GROMACS installation to use (empty for default)")
-set(GROMACS_DIR "/localdisk/appl/gromacs514/share/cmake/gromacs")
+set(GROMACS_DIR "/localdisk/local/share/cmake/gromacs")
 
 # This does not allow for a non-suffixed double-precision libgromacs, but
 # that should be rare enough for demonstration purposes.
@@ -52,14 +52,13 @@ add_definitions(${GROMACS_DEFINITIONS})
 set (CMAKE_CXX_FLAGS "-Wall -O2 -pg -std=c++14")
 
 # includes and sources
-include_directories(inc)
+include_directories(include/ include/waternetwork include/alphashape)
 #file(GLOB SOURCES "src/*.cpp")
 
 set( SOURCE_WATERNETWORK src/waternetwork.cpp
   src/dipole_module.cpp
   src/graph_module.cpp
-  src/lifetime_module.cpp
-  src/alpha_shape_module.cpp)
+  src/lifetime_module.cpp)
 
 set( SOURCE_ALPHASHAPE src/alphashape.cpp
   src/alpha_shape_module.cpp)

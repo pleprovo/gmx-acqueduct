@@ -36,6 +36,7 @@
 #include <string>
 #include <vector>
 
+#include "alphashape/alpha_shape_module.hpp"
 #include "graph_module.hpp"
 
 #include <gromacs/trajectoryanalysis.h>
@@ -63,22 +64,26 @@ public:
 private:
     class ModuleData;
     
-    std::string                      fnDist_;
-    double                           cutoff_;
-    int                              nb_water_;
+    std::string fnDist_;
+    double cutoff_;
+    int nb_water_;
     
-    gmx::Selection                   solvent_;
-    gmx::Selection                   source_;
-    gmx::Selection                   sink_;
+    gmx::Selection solvent_;
+    gmx::Selection calpha_;
+    gmx::Selection source_;
+    gmx::Selection sink_;
+
+    std::vector<int> oxygenIndices_;
+
+    gmx::AnalysisNeighborhood nb1_;
+    gmx::AnalysisNeighborhood nb2_;
     
-    gmx::AnalysisNeighborhood             nb1_;
-    gmx::AnalysisNeighborhood             nb2_;
-    
-    gmx::AnalysisData                     data_; // Private Data
+    gmx::AnalysisData data_; 
     
     gmx::AnalysisDataAverageModulePointer avem_;
 
-    std::shared_ptr<GraphModule>      graphModulePtr_;
+    std::shared_ptr<AlphaShapeModule> alphaShapeModulePtr_;
+    std::shared_ptr<GraphModule> graphModulePtr_;
 };
 
 

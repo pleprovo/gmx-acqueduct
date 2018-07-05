@@ -61,35 +61,8 @@ using vertex_descriptor = boost::graph_traits<Graph>::vertex_descriptor;
 using edge_descriptor = boost::graph_traits<Graph>::edge_descriptor;
 
 // Iterators
-using vertex_iterator =  boost::graph_traits<Graph>::vertex_iterator;
-using edge_iterator = boost::graph_traits<Graph>::edge_iterator;
-
-/*
-typedef subgraph < Graph > SubGraph;
-using vertex_component_map = boost::shared_ptr<std::vector<unsigned long>>;
-
-using ComponentGraph = boost::filtered_graph<Graph,
-					     std::function<bool(Graph::edge_descriptor)>,
-					     std::function<bool(Graph::vertex_descriptor)> >;
-
-std::vector<ComponentGraph> connected_components_subgraphs(const Graph &g);
-
-Subgraph buildSubgraph(const std::vector<int> &vertices, const Subgraph &g);
-*/
-/*
-template <typename T>
-float averageDegree(T &g) {
-    vertex_iterator vi, vi_end, next;
-    boost::tie(vi, vi_end) = boost::vertices(g);
-    float average = 0.0;
-    for (next = vi; vi != vi_end; vi = next) {
-	++next;
-        average += boost::degree(*vi, g);
-    }
-    return average/boost::num_vertices(g);
-
-}
-*/
+// using vertex_iterator =  boost::graph_traits<Graph>::vertex_iterator;
+// using edge_iterator = boost::graph_traits<Graph>::edge_iterator;
 
 class GraphModule
 {
