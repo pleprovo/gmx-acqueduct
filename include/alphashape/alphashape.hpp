@@ -40,7 +40,6 @@
 
 #include <gromacs/trajectoryanalysis.h>
 
-
 /*! \brief
  * Template class to serve as a basis for user analysis tools.
  */
@@ -62,20 +61,34 @@ public:
     virtual void writeOutput();
 
 private:
-    class ModuleData;
+    //class ModuleData;
     
-    std::string                      fnPopulation_;
-    std::string                      fnSurface_ = "surface.off";
+    gmx::SelectionList               selectionListAlpha_;
+    gmx::Selection                   selectionWater_;
     
-    gmx::Selection                   alphasel_;
-    gmx::Selection                   watersel_;
+    std::string                      filenameWater_;
+    std::string                      filenameVolume_;
+    std::string                      filenameSurface_;
+    std::string                      filenameStats_;
     
-    gmx::AnalysisData                     data_;
-    gmx::AnalysisDataAverageModulePointer avem_;
+    double                           alphaValue_;
+    double                           numFrameValue_;
+    
+    gmx::AnalysisData                waterData_;
+    gmx::AnalysisData                volumeData_;
+    
+    std::vector<std::vector<int> > lifetime_;
+    std::vector<std::vector<int> > cumulLifetime_;
+    std::vector<std::vector<int> > tempLifetime_;    
+    std::vector<std::vector<bool> > previousBuried_;
 
+    std::vector<std::vector<bool> > waterPresence_;
+    
+    
     // Customs Modules
     std::shared_ptr<AlphaShapeModule> alphaShapeModulePtr_;
 
+    std::vector<std::ofstream>        outputVectorSurface_;
 };
 
 

@@ -49,29 +49,37 @@ gromacs_check_compiler(CXX)
 include_directories(${GROMACS_INCLUDE_DIRS})
 add_definitions(${GROMACS_DEFINITIONS})
 
-set (CMAKE_CXX_FLAGS "-Wall -O2 -pg -std=c++14")
+set (CMAKE_CXX_FLAGS "-Wall -O2 -pg -std=c++14 -lfftw3")
 
 # includes and sources
-include_directories(include/ include/waternetwork include/alphashape)
+include_directories(include/ include/waternetwork include/alphashape include/utils)
 #file(GLOB SOURCES "src/*.cpp")
 
 set( SOURCE_WATERNETWORK src/waternetwork.cpp
   src/dipole_module.cpp
   src/graph_module.cpp
-  src/lifetime_module.cpp)
+  src/lifetime_module.cpp
+  src/correlation.cpp)
 
 set( SOURCE_ALPHASHAPE src/alphashape.cpp
-  src/alpha_shape_module.cpp)
+  src/alpha_shape_module.cpp
+  src/correlation.cpp)
+
+set( SOURCE_TESTS tests/tests.cpp
+  src/graph_module.cpp
+  src/alpha_shape_module.cpp
+  src/correlation.cpp)
 
 # Creating entries for all C++ files with "main" routine
 # ##########################################################
 
 add_executable ( waternetwork ${SOURCE_WATERNETWORK})
 add_executable ( alphashape ${SOURCE_ALPHASHAPE})
+add_executable ( tests ${SOURCE_TESTS} )
 
 target_link_libraries( waternetwork ${GROMACS_LIBRARIES} )
 target_link_libraries( alphashape ${GROMACS_LIBRARIES}
   ${CGAL_LIBRARIES} ${CGAL_3RD_PARTY_LIBRARIES} )
-
+target_link_libraries( tests ${GROMACS_LIBRARIES} fftw3)
 
 

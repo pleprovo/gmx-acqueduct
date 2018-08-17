@@ -19,61 +19,66 @@
 #include <boost/graph/graph_traits.hpp>
 
 #include <boost/range/iterator_range.hpp>
-/*
-#include <boost/graph/filtered_graph.hpp>
-#include <boost/graph/connected_components.hpp>
-#include <boost/graph/graphml.hpp>
-#include <boost/graph/subgraph.hpp>
-#include <boost/graph/graph_utility.hpp> 
-*/
 
 #include <boost/graph/boykov_kolmogorov_max_flow.hpp>
-
-#include <boost/graph/depth_first_search.hpp>
+#include <boost/graph/successive_shortest_path_nonnegative_weights.hpp>
 #include <boost/graph/dijkstra_shortest_paths.hpp>
-#include <boost/graph/graphml.hpp>
+#include <boost/graph/graph_utility.hpp>
 
 #include <fstream>
 #include <iostream>
 
-typedef boost::adjacency_list_traits<boost::vecS, boost::vecS, boost::directedS> Traits;
+using Traits = boost::adjacency_list_traits<boost::listS, boost::vecS, boost::directedS>;
 
-struct VertexProperties {
-    int id = 0;
+struct Atom
+{
+    int id;
+    int resid;
+    std::string name;
+    bool isDonor;
+    bool isWater;
+    Traits::vertex_descriptor predecessor;
+    double distance;
+    boost::default_color_type color;
 };
 
-struct EdgeProperties {
-    long weight;
-    long capacity;
-    long residual_capacity;
-    Traits::edge_descriptor reverse;
+struct HydrogenBond
+{
+    int id;
+    double length;
+    double angle;
+    double energy;
+    double residual_energy;
+    Traits::edge_descriptor reverse_edge;
 };
 
-typedef boost::adjacency_list<boost::vecS, boost::vecS, boost::directedS,
-			      boost::no_property,
-			      boost::property<boost::edge_index_t, std::size_t> > Graph;
+using Graph = boost::adjacency_list<boost::listS, boost::vecS, boost::directedS,
+				      Atom, HydrogenBond>;
 
-typedef boost::adjacency_list<boost::vecS, boost::vecS, boost::directedS,
-			      VertexProperties, EdgeProperties> graph_t;
+template <typename S>
+void add_bidirectional_edge(int u, int v, S s, Graph &g)
+{
+    auto e1 = boost::add_edge(u, v, s, g).first;
+    auto e2 = boost::add_edge(v, u, s, g).first;
+    g[e1].reverse_edge = e2;
+    g[e2].reverse_edge = e1;
+}
 
-// Descriptors
-using vertex_descriptor = boost::graph_traits<Graph>::vertex_descriptor;
-using edge_descriptor = boost::graph_traits<Graph>::edge_descriptor;
+void print_predecessor_path(Graph &g, Traits::vertex_descriptor v);
+double do_max_flow(Graph &g, Graph::vertex_descriptor &source, Graph::vertex_descriptor &sink);
 
-// Iterators
-// using vertex_iterator =  boost::graph_traits<Graph>::vertex_iterator;
-// using edge_iterator = boost::graph_traits<Graph>::edge_iterator;
-
+    
 class GraphModule
 {
 public:
     GraphModule();
-    void set_nodes(int n);
-    bool add_bidirectional_edge(int, int, const EdgeProperties&);
-    
+    GraphModule(const int n);
+    void add_vertex(const Atom &v);
+    void add_edge(const int, const int, const HydrogenBond &e);
+    double max_flow(const int, const int);
+    void clear();
 private:
     Graph g_;
 };
-
 
 #endif
