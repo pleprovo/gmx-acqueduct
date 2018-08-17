@@ -1,4 +1,4 @@
-  
+
 
 #include "waternetwork.hpp"
 #include "gromacs/pbcutil/pbc.h"
@@ -7,6 +7,18 @@
 #include <fstream>
 #include <limits>
 #include <math.h>
+
+
+struct custom_comparator {
+    bool operator()(const std::pair<int, int>& a,
+                    const std::pair<int, int>& b) const
+    {
+        return less_comparator(std::minmax(a.first, a.second),
+                               std::minmax(b.first, b.second));
+    }
+
+    std::less<std::pair<int, int>> less_comparator;
+};
 
 double switch_function(double r, double r_on, double r_off)
 {
@@ -21,6 +33,20 @@ double switch_function(double r, double r_on, double r_off)
 	sw = 1.0;
     }
     return sw;
+}
+
+template <class T>
+std::vector<T> fromGmxtoCgalPosition(const gmx::ConstArrayRef<rvec> &coordinates,
+				     const int increment=1)
+{
+    std::vector<T> cgalPositionVector;   
+    for (unsigned int i = 0; i < coordinates.size(); i += increment)
+    {
+	cgalPositionVector.push_back(T(coordinates.at(i)[XX],
+				       coordinates.at(i)[YY],
+				       coordinates.at(i)[ZZ]));
+    }
+    return cgalPositionVector;
 }
 
 HydrogenBond computeHB(const rvec acceptor, const rvec donor, const rvec hydrogen)
@@ -39,7 +65,7 @@ HydrogenBond computeHB(const rvec acceptor, const rvec donor, const rvec hydroge
     
     double r = 10.0*norm(AD);
     double angle = cos_angle(DH, AD);
-    if ( gmx_angle(DH, AD) < 1.75 )
+    if ( cos_angle(DH, AD) < -0.52 )
     {
 	double r_switch = switch_function(r, r_on, r_off);
 	double theta_switch = 1-switch_function(pow(angle, 2), pow(theta_off, 2),
@@ -152,7 +178,7 @@ void WaterNetwork::initAnalysis(const gmx::TrajectoryAnalysisSettings &settings,
     
     /* Init neihborsearch cutoff value */
     nb1_.setCutoff(cutoff_);
-    nb2_.setCutoff(0.30);
+    nb2_.setCutoff(cutoff_);
     nb1_.setMode(gmx::AnalysisNeighborhood::SearchMode::eSearchMode_Grid);
     nb2_.setMode(gmx::AnalysisNeighborhood::SearchMode::eSearchMode_Grid);
     
@@ -212,75 +238,75 @@ WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
     const gmx::Selection           &calphasel = pdata->parallelSelection(calpha_);
     const gmx::Selection           &sinksel = pdata->parallelSelection(sink_);
     const gmx::Selection           &watersel = pdata->parallelSelection(solvent_);
-
+    
     gmx::ConstArrayRef<int> oxygenArrayRef(oxygenIndices_);
+
+    std::vector<Point_3> oxygenVec = fromGmxtoCgalPosition<Point_3>(watersel.coordinates(), 3);
+    
+    Delaunay DT(oxygenVec.begin(), oxygenVec.end());
+    CGAL_assertion( DT.number_of_vertices() == oxygenVec.size() );   
+
+    for(Delaunay::Finite_edges_iterator ei=DT.finite_edges_begin();ei!=DT.finite_edges_end(); ei++){
+	
+	std::cout << ei->first->vertex( (ei->second+1)%3)  << " ";
+	std::cout << ei->first->vertex( (ei->second+2)%3)  << std::endl;
+    }
+    
+    // std::cout << DT.number_of_edges() << " " << FDT.number_of_edges() << std::endl;
     
     /* Find all hydrogen bonds */
-    gmx::AnalysisNeighborhoodPair pair;
-    gmx::AnalysisNeighborhoodPositions sourcePos(sourcesel);
-    gmx::AnalysisNeighborhoodPositions calphaPos(calphasel);
-    gmx::AnalysisNeighborhoodPositions sinkPos(sinksel);    
-    gmx::AnalysisNeighborhoodPositions waterPos(watersel);
+    // gmx::AnalysisNeighborhoodPair pair;
+    // gmx::AnalysisNeighborhoodPositions sourcePos(sourcesel);
+    // gmx::AnalysisNeighborhoodPositions calphaPos(calphasel);
+    // gmx::AnalysisNeighborhoodPositions sinkPos(sinksel);    
+    // gmx::AnalysisNeighborhoodPositions waterPos(watersel);
     
-    gmx::AnalysisNeighborhoodPositions oxygenPos = waterPos.indexed(oxygenArrayRef);
+    // gmx::AnalysisNeighborhoodPositions oxygenPos = waterPos.indexed(oxygenArrayRef);
     
-    gmx::AnalysisNeighborhoodSearch searchAlpha = nb1_.initSearch(pbc, oxygenPos);
-    gmx::AnalysisNeighborhoodPairSearch pairSearchAlpha = searchAlpha.startPairSearch(calphaPos);
-    std::set<int> neighborSet;
-    std::vector<int> neighborVec;
-    while (pairSearchAlpha.findNextPair(&pair))
-    {
-        neighborSet.insert(oxygenArrayRef.at(pair.refIndex()));
-    }
-    // std::cout << oxygenArrayRef.size() << " " << neighborSet.size() << std::endl;
-    std::copy(neighborSet.begin(), neighborSet.end(), std::back_inserter(neighborVec));
-    gmx::ConstArrayRef<int> neighborArrayRef(neighborVec);
-    
-    gmx::AnalysisNeighborhoodPositions neighborPos = waterPos.indexed(neighborArrayRef);
-    gmx::AnalysisNeighborhoodSearch search1 = nb1_.initSearch(pbc, neighborPos);
-    gmx::AnalysisNeighborhoodPairSearch pairSearch = search1.startPairSearch(neighborPos);
+    // gmx::AnalysisNeighborhoodSearch searchAlpha = nb1_.initSearch(pbc, oxygenPos);
+    // gmx::AnalysisNeighborhoodPairSearch pairSearchAlpha = searchAlpha.startPairSearch(calphaPos);
+    // std::set<int> neighborSet;
+    // std::vector<int> neighborVec;
+    // while (pairSearchAlpha.findNextPair(&pair))
+    // {
+    //     neighborSet.insert(oxygenArrayRef.at(pair.refIndex()));
+    // }
+    // // std::cout << oxygenArrayRef.size() << " " << neighborSet.size() << std::endl;
+    // std::copy(neighborSet.begin(), neighborSet.end(), std::back_inserter(neighborVec));
+    // gmx::ConstArrayRef<int> neighborArrayRef(neighborVec);
+  
+    // gmx::AnalysisNeighborhoodPositions neighborPos = waterPos.indexed(neighborArrayRef);
+    // gmx::AnalysisNeighborhoodSearch search1 = nb1_.initSearch(pbc, neighborPos);
+    // gmx::AnalysisNeighborhoodPairSearch pairSearch = search1.startPairSearch(neighborPos);
 	
-    gmx::AnalysisNeighborhoodSearch search2 = nb2_.initSearch(pbc, neighborPos);    
-    gmx::AnalysisNeighborhoodPairSearch pairSearchSource = search2.startPairSearch(sourcePos);
-    gmx::AnalysisNeighborhoodPairSearch pairSearchSink = search2.startPairSearch(sinkPos);
+    // gmx::AnalysisNeighborhoodSearch search2 = nb2_.initSearch(pbc, neighborPos);    
+    // gmx::AnalysisNeighborhoodPairSearch pairSearchSource = search2.startPairSearch(sourcePos);
+    // gmx::AnalysisNeighborhoodPairSearch pairSearchSink = search2.startPairSearch(sinkPos);
 
     std::set<int> sourceEdges;
     std::set<int> sinkEdges;
     std::vector<HydrogenBond> HBVector;
-    GraphModule g(nb_water_+2);
-    int num_edge = 0;
-    HydrogenBond HB;
-    HB.energy = 0.0;
+    // GraphModule g(nb_water_+2);
     
-    while (pairSearch.findNextPair(&pair))
-    {
-	if (pair.refIndex() != pair.testIndex())
-	{
-	    checkHB(pair, watersel, neighborArrayRef, HBVector);
-	    std::cout << '('
-		      << HBVector.at(HBVector.size()-1).energy << " "
-		      << HBVector.at(HBVector.size()-1).length << " "
-		      << HBVector.at(HBVector.size()-1).angle << " | "
-		      << HBVector.at(HBVector.size()-2).energy << " "
-		      << HBVector.at(HBVector.size()-2).length << " "
-		      << HBVector.at(HBVector.size()-2).angle << ")\n";
-	}
-    }
-    std::cout << '('<< HB.energy << " "
-    	      << HB.length << " "
-    	      << HB.angle << ")\n";
+    // while (pairSearch.findNextPair(&pair))
+    // {
+    // 	if (pair.refIndex() != pair.testIndex())
+    // 	{
+	    
+    // 	}
+    // }
     
-    while (pairSearchSource.findNextPair(&pair))
-    {
-    	sourceEdges.insert(pair.refIndex());
-    }
+    // while (pairSearchSource.findNextPair(&pair))
+    // {
+    // 	sourceEdges.insert(pair.refIndex());
+    // }
 
-    while (pairSearchSink.findNextPair(&pair))
-    {
-    	sinkEdges.insert(pair.refIndex());
-    }
+    // while (pairSearchSink.findNextPair(&pair))
+    // {
+    // 	sinkEdges.insert(pair.refIndex());
+    // }
 
-    
+
     
     dh.startFrame(frnr, fr.time);
     dh.setPoint(0, HBVector.size());
@@ -288,7 +314,7 @@ WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
     dh.setPoint(2, sinkEdges.size());
     dh.setPoint(3, 0/*flow*/);
     dh.finishFrame();
-    g.clear();
+    // g.clear();
 }
 
 

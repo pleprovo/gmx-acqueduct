@@ -52,10 +52,11 @@ add_definitions(${GROMACS_DEFINITIONS})
 set (CMAKE_CXX_FLAGS "-Wall -O2 -pg -std=c++14 -lfftw3")
 
 # includes and sources
-include_directories(include/ include/waternetwork include/alphashape include/utils)
+include_directories(include/)
 #file(GLOB SOURCES "src/*.cpp")
 
 set( SOURCE_WATERNETWORK src/waternetwork.cpp
+  src/alpha_shape_module.cpp
   src/dipole_module.cpp
   src/graph_module.cpp
   src/lifetime_module.cpp
