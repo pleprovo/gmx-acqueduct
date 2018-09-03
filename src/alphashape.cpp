@@ -204,7 +204,7 @@ void AlphaShape::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
 }
 
 
-void AlphaShape::finishAnalysis(int /*nframes*/)
+void AlphaShape::finishAnalysis(int nframes)
 {
     std::vector<int> lifetime(selectionWater_.posCount()/3);
     std::vector<int> cumul(selectionWater_.posCount()/3);
@@ -221,16 +221,32 @@ void AlphaShape::finishAnalysis(int /*nframes*/)
     }
     
     int count = 0;
+    int positive = 0;
+    double stds = 0;
     for (auto &water : lifetime)
     {
-	if (water > 250)
+	if (water >= nframes)
 	{
 	    std::cout << water << " ";
-	    ++count;
+	    count += water;
+	}
+	if (water > 0)
+	{
+	    positive++;
+
 	}
     }
+    double average = 1.0*count/positive;
+    for (auto &water : lifetime)
+    {
+	if (water > 0)
+	{
+	    stds += pow(water-average, 2.0);
+	}
+    }
+    stds /= positive-1;
     std::cout << std::endl;
-    std::cout <<  count << std::endl;
+    std::cout << average << "+- " << pow(stds, 0.5) << std::endl;
     
     // std::ofstream oss;
     // oss.open("buried.ndx");

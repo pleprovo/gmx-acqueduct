@@ -28,11 +28,19 @@ typedef CGAL::Alpha_shape_vertex_base_3<K>                  Vb;
 typedef CGAL::Triangulation_hierarchy_vertex_base_3<Vb>     Vbh;
 typedef CGAL::Alpha_shape_cell_base_3<K>                    Fb;
 typedef CGAL::Triangulation_data_structure_3<Vbh,Fb>        Tds;
-typedef CGAL::Delaunay_triangulation_3<K,Tds, CGAL::Fast_location>               Delaunay;
+typedef CGAL::Delaunay_triangulation_3<K,Tds, CGAL::Fast_location> Delaunay;
 typedef CGAL::Alpha_shape_3<Delaunay>                       Alpha_shape_3;
 typedef Alpha_shape_3::Facet		                    Facet;
 typedef Alpha_shape_3::Classification_type                  Classification;
 typedef K::Point_3					    Point_3;
+
+#include <CGAL/Triangulation_vertex_base_with_info_3.h>
+
+typedef CGAL::Triangulation_vertex_base_with_info_3<unsigned, K>    Vbi;
+typedef CGAL::Triangulation_data_structure_3<Vbi>                   Tdsi;
+//Use the Fast_location tag. Default or Compact_location works too.
+typedef CGAL::Delaunay_triangulation_3<K, Tdsi, CGAL::Fast_location> DelaunayWithInfo;
+typedef DelaunayWithInfo::Point                                      Point;
 
 /*!
   * Class that implement the method to find the water inside the protein.
