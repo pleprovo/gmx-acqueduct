@@ -18,7 +18,7 @@
 #include <CGAL/Delaunay_triangulation_3.h>
 #include <CGAL/Alpha_shape_3.h>
 #include <CGAL/Triangulation_hierarchy_3.h>
-
+#include <CGAL/Triangulation_vertex_base_with_info_3.h>
 
 // CGAL Kernel
 typedef CGAL::Exact_predicates_inexact_constructions_kernel K;
@@ -34,13 +34,9 @@ typedef Alpha_shape_3::Facet		                    Facet;
 typedef Alpha_shape_3::Classification_type                  Classification;
 typedef K::Point_3					    Point_3;
 
-#include <CGAL/Triangulation_vertex_base_with_info_3.h>
-
 typedef CGAL::Triangulation_vertex_base_with_info_3<unsigned, K>    Vbi;
 typedef CGAL::Triangulation_data_structure_3<Vbi>                   Tdsi;
-//Use the Fast_location tag. Default or Compact_location works too.
-typedef CGAL::Delaunay_triangulation_3<K, Tdsi, CGAL::Fast_location> DelaunayWithInfo;
-typedef DelaunayWithInfo::Point                                      Point;
+typedef CGAL::Delaunay_triangulation_3<K, Tdsi> DelaunayWithInfo;
 
 /*!
   * Class that implement the method to find the water inside the protein.

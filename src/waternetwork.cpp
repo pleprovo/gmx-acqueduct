@@ -8,7 +8,6 @@
 #include <limits>
 #include <math.h>
 
-
 struct custom_comparator {
     bool operator()(const std::pair<int, int>& a,
                     const std::pair<int, int>& b) const
@@ -19,6 +18,51 @@ struct custom_comparator {
 
     std::less<std::pair<int, int>> less_comparator;
 };
+
+/* Graph Stuff */
+
+template <typename S>
+void add_bidirectional_edge(int u, int v, S s, Graph &g)
+{
+    auto e1 = boost::add_edge(u, v, s, g).first;
+    auto e2 = boost::add_edge(v, u, s, g).first;
+    g[e1].reverse_edge = e2;
+    g[e2].reverse_edge = e1;
+}
+
+void print_predecessor_path(Graph &g, Traits::vertex_descriptor v)
+{
+    using path_t = std::vector<Graph::edge_descriptor>;
+    path_t path;    
+    for(Graph::vertex_descriptor u = g[v].predecessor; u != v; v=u, u=g[v].predecessor)
+    {
+    	std::pair<Graph::edge_descriptor, bool> edge_pair = boost::edge(u,v,g);
+    	path.push_back( edge_pair.first );
+    }
+        
+    std::cout << "Shortest Path from v1 to v6:" << std::endl;
+    for(path_t::reverse_iterator riter = path.rbegin(); riter != path.rend(); ++riter)
+    {
+        Graph::vertex_descriptor u_tmp = boost::source(*riter, g);
+        Graph::vertex_descriptor v_tmp = boost::target(*riter, g);
+        Graph::edge_descriptor e_tmp = boost::edge(u_tmp, v_tmp, g).first;
+	
+    	std::cout << "  " << g[u_tmp].id << " -> " << g[v_tmp].id << "    (weight: " << g[e_tmp].length << ")" << std::endl;
+    }
+}
+
+double do_max_flow(Graph &g, const int source, const int sink)
+{
+    auto idx = get(&Atom::id, g);
+    auto cap    = get(&HydrogenBond::energy, g);
+    auto rescap = get(&HydrogenBond::residual_energy, g);
+    auto rev = get(&HydrogenBond::reverse_edge, g);
+
+    double flow = boost::boykov_kolmogorov_max_flow(g, cap, rescap, rev, idx, source, sink);
+    return flow;
+}
+
+/* Hydrogen Bond stuff */
 
 double switch_function(double r, double r_on, double r_off)
 {
@@ -84,6 +128,23 @@ HydrogenBond computeHB(const rvec acceptor, const rvec donor, const rvec hydroge
     return out;
 }
 
+double computeEnergy(const double r, const double cosine)
+{
+    static float C = 3855; /* epsilon*sigma^6*sqrt(2/3) */
+    static float D = 738; /* epsilon*sigma^4*sqrt(2/3) */
+    static float theta_on = 0.25;
+    static float theta_off = 0.03015369;
+    static float r_on = 5.5;
+    static float r_off = 6.5;
+    double energy = 0.0;
+    double angle = std::acos(cosine);
+    double r_switch = switch_function(r, r_on, r_off);
+    double theta_switch = 1-switch_function(pow(angle, 2), pow(theta_off, 2),
+					    pow(theta_on, 2)); 
+    energy = ((C/pow(r, 6.0))-(D/pow(r, 4.0)))*pow(cosine, 4.0)*r_switch*theta_switch;
+    return energy;
+}
+
 void checkHB(const gmx::AnalysisNeighborhoodPair &pair,
 	     const gmx::Selection &waterSelection,
 	     const gmx::ConstArrayRef<int> &mappedIds,
@@ -94,18 +155,20 @@ void checkHB(const gmx::AnalysisNeighborhoodPair &pair,
     auto hydrogen2 = waterSelection.position(mappedIds.at(pair.testIndex())+2).x();
     auto acceptor = waterSelection.position(mappedIds.at(pair.refIndex())).x();
 
-    HydrogenBond out1, out2;
+    HydrogenBond out1, out2, out;
     out1 = computeHB(acceptor, donor, hydrogen1);
     out2 = computeHB(acceptor, donor, hydrogen2);
-    if (out1 > out2)
+    if (out1.energy > out2.energy)
     {
-
+	out = out1;
+    }
+    else
+    {
+	out = out2;
     }
     
     
-    edgeVector.push_back(out1);
-    edgeVector.push_back(out2);
-							  
+    edgeVector.push_back(out);							  
 }
 
 WaterNetwork::WaterNetwork()
@@ -144,7 +207,6 @@ void WaterNetwork::initOptions(gmx::Options                    *options,
 		       .defaultSelectionText("Water")
 		       .description("Groups to calculate graph properties (default Water)"));    
     options->addOption(gmx::SelectionOption("alpha").store(&calpha_).required()
-		       .defaultSelectionText("CAlpha")
 		       .description(""));
     options->addOption(gmx::SelectionOption("source").store(&source_)
 		       .description("Define a group as a source for maximum flow analysis, must be used with -sink option"));
@@ -248,53 +310,103 @@ WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
     
     gmx::ConstArrayRef<int> oxygenArrayRef(oxygenIndices_);
 
-    // std::vector<Point> oxygenVec = fromGmxtoCgalPosition<Point>(watersel.coordinates(), 3);
-    // gmx::ConstArrayRef<rvec> alphaCoordinates = calphasel.coordinates();
+    std::set<int> sourceEdges;
+    std::set<int> sinkEdges;
+    std::vector<HydrogenBond> HBVector;
 
-    // /* Create CGAL Point_3 vector */
-    // std::vector<Point_3> alphaPoints = fromGmxtoCgalPosition<Point_3>(alphaCoordinates);
+    /* Converstion of positions set to cgal point vectors */
+    std::vector<Point_3> alphaPoints = fromGmxtoCgalPosition<Point_3>(calphasel.coordinates());
+    std::vector<Point_3> watersVec = fromGmxtoCgalPosition<Point_3>(watersel.coordinates());
+    std::vector<Point_3> oxygenVec = fromGmxtoCgalPosition<Point_3>(watersel.coordinates(), 3);
 	
-    // /* Vector of buried water */
-    // std::vector<int> buriedWaterVector;
 
-    // /* Alpha shape computation */
-    // alphaShapeModulePtr_->build(alphaPoints, 1.0);    
-    // buriedWaterVector = alphaShapeModulePtr_->locate(oxygenVec, true);
+    /* Alpha shape computation */
+    alphaShapeModulePtr_->build(alphaPoints, 1.0);    
+    std::vector<int> buriedWaterVector = alphaShapeModulePtr_->locate(oxygenVec, true);
     
-    // std::vector<std::pair<Point, unsigned> > oxygenVecInfo;
-    // for (auto &indice : buriedWaterVector)
-    // {
-    // 	oxygenVecInfo.push_back(std::make_pair(oxygenVec.at(indice), indice));
-    // 	std::cout << indice << std::endl;
-    // }
-    
-    // DelaunayWithInfo DT(oxygenVecInfo.begin(), oxygenVecInfo.end());
-    // CGAL_assertion( DT.number_of_vertices() == oxygenVec.size() );   
-    // std::cout << DT.number_of_vertices() << " " << DT.number_of_edges() << " / ";
-    
-    // Graph g;
-    // int i, j;
-    // HydrogenBond hb;
-    // for(DelaunayWithInfo::Finite_edges_iterator ei=DT.finite_edges_begin();ei!=DT.finite_edges_end(); ei++)
-    // {
-    // 	i = ei->first->vertex((ei->second+1)%3)->info();
-    // 	j = ei->first->vertex((ei->second+2)%3)->info();
-    // 	std::cout << "(" << i << "," << j << ") ";
-    // 	boost::add_edge(i, j, hb, g);
-    // }
-    
-    // std::cout << boost::num_vertices(g) << " " << boost::num_edges(g) << std::endl;
+    DelaunayWithInfo DT;
+    Graph g;
+    int count = 0;
+    HydrogenBond hb;
+    for (auto &indice : buriedWaterVector)
+    {
+	DelaunayWithInfo::Vertex_handle vh = DT.insert(oxygenVec.at(indice));
+	vh->info() = count;
+	boost::add_vertex(Atom{count}, g);
+	count++;
+    }
+    CGAL_assertion(DT.number_of_vertices() == oxygenVec.size());
 
-    // std::cout << "\n";
+    CGAL::Vector_3<K> OO, OH11, OH12, OH21, OH22;
+    double distance;
+    for(DelaunayWithInfo::Finite_edges_iterator ei=DT.finite_edges_begin();ei!=DT.finite_edges_end(); ++ei)
+    {
+	int i = ei->first->vertex(ei->second)->info();
+	int j = ei->first->vertex(ei->third)->info();
+      
+        OO = oxygenVec.at(i) - oxygenVec.at(j);
+        OH11 = watersVec.at(3*buriedWaterVector.at(i)+1) - oxygenVec.at(i);
+        OH12 = watersVec.at(3*buriedWaterVector.at(i)+2) - oxygenVec.at(i);
+        OH21 = watersVec.at(3*buriedWaterVector.at(j)+1) - oxygenVec.at(j);
+        OH22 = watersVec.at(3*buriedWaterVector.at(j)+2) - oxygenVec.at(j);
+	
+        distance = CGAL::sqrt(OO*OO);	
+	double cosine11 = OH11 * OO / distance / CGAL::sqrt(OH11*OH11);
+	double cosine12 = OH12 * OO / distance / CGAL::sqrt(OH12*OH12);
+	double cosine21 = OH21 * OO / distance / CGAL::sqrt(OH21*OH21);
+	double cosine22 = OH22 * OO / distance / CGAL::sqrt(OH22*OH22);
+
+	std::vector<double> energies(4, 0.0);	
+        energies.at(0) = computeEnergy(distance, cosine11);
+        energies.at(1) = computeEnergy(distance, cosine12);
+        energies.at(2) = computeEnergy(distance, cosine21);
+	energies.at(3) = computeEnergy(distance, cosine22);
+
+	hb.energy = *std::max_element(energies.begin(), energies.end());
+
+	add_bidirectional_edge(i, j, hb, g);	
+    }
+    
+    std::cout << oxygenVec.at(0) << "/" << watersVec.at(3*buriedWaterVector.at(0)) << std::endl;
+    
+    std::cout << std::sqrt(OH11*OH11) << " "
+	      << std::sqrt(OH12*OH12) << " "
+	      << std::sqrt(OH21*OH21) << " "
+	      << std::sqrt(OH22*OH22) << " ";
+    std::cout << distance << " ";  
+    std::cout << "\n";
+    
+    double flow = do_max_flow(g, 10, 15);
+    
+    // for (auto vd : boost::make_iterator_range(vertices(g))) {
+    // 	if (boost::out_degree(vd, g) == 0)
+    // 	{
+    // 	    std::cout << "Vertex descriptor #" << vd 
+    // 		      << "\n";
+    // 	}
+    // }
+
+    // if (frnr == 0)
+    // {
+    // 	std::ofstream oss;
+    // 	oss.open("triangulation.off");
+    // 	oss << DT;
+    // 	oss.close();
+    // }
+
+    // std::cout << "\nBuried : " << buriedWaterVector.size() << " "
+    // 	      << "DT(" << DT.number_of_vertices() << ", " << DT.number_of_edges() << ") "
+    // 	      << "Gr(" << boost::num_vertices(g) << ", " << boost::num_edges(g) << ", "
+    // 	      << "flow : " << flow << ")\n";
     
     /* Find all hydrogen bonds */
-    gmx::AnalysisNeighborhoodPair pair;
-    gmx::AnalysisNeighborhoodPositions sourcePos(sourcesel);
-    gmx::AnalysisNeighborhoodPositions calphaPos(calphasel);
-    gmx::AnalysisNeighborhoodPositions sinkPos(sinksel);    
-    gmx::AnalysisNeighborhoodPositions waterPos(watersel);
+    // gmx::AnalysisNeighborhoodPair pair;
+    // gmx::AnalysisNeighborhoodPositions sourcePos(sourcesel);
+    // gmx::AnalysisNeighborhoodPositions calphaPos(calphasel);
+    // gmx::AnalysisNeighborhoodPositions sinkPos(sinksel);    
+    // gmx::AnalysisNeighborhoodPositions waterPos(watersel);
     
-    gmx::AnalysisNeighborhoodPositions oxygenPos = waterPos.indexed(oxygenArrayRef);
+    // gmx::AnalysisNeighborhoodPositions oxygenPos = waterPos.indexed(oxygenArrayRef);
     
     // gmx::AnalysisNeighborhoodSearch searchAlpha = nb1_.initSearch(pbc, oxygenPos);
     // gmx::AnalysisNeighborhoodPairSearch pairSearchAlpha = searchAlpha.startPairSearch(calphaPos);
@@ -312,46 +424,40 @@ WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
     // gmx::AnalysisNeighborhoodSearch search1 = nb1_.initSearch(pbc, neighborPos);
     // gmx::AnalysisNeighborhoodPairSearch pairSearch = search1.startPairSearch(neighborPos);
 	
-    gmx::AnalysisNeighborhoodSearch search2 = nb2_.initSearch(pbc, oxygenPos);    
-    gmx::AnalysisNeighborhoodPairSearch pairSearchSource = search2.startPairSearch(sourcePos);
-    gmx::AnalysisNeighborhoodPairSearch pairSearchSink = search2.startPairSearch(sinkPos);
+    // gmx::AnalysisNeighborhoodSearch search2 = nb2_.initSearch(pbc, oxygenPos);    
+    // gmx::AnalysisNeighborhoodPairSearch pairSearchSource = search2.startPairSearch(sourcePos);
+    // gmx::AnalysisNeighborhoodPairSearch pairSearchSink = search2.startPairSearch(sinkPos);
 
-    gmx::AnalysisNeighborhoodSearch search1 = nb1_.initSearch(pbc, oxygenPos);
-    gmx::AnalysisNeighborhoodPairSearch pairSearch = search1.startPairSearch(oxygenPos);
-    
-    std::set<int> sourceEdges;
-    std::set<int> sinkEdges;
-    std::vector<HydrogenBond> HBVector;
-    Graph g(nb_water_+2);
+    // gmx::AnalysisNeighborhoodSearch search1 = nb1_.initSearch(pbc, oxygenPos);
+    // gmx::AnalysisNeighborhoodPairSearch pairSearch = search1.startPairSearch(oxygenPos);
+     
+    // Graph g(nb_water_+2);
 
-    std::vector<std::pair<std::pair<int,int>, double> hbn;
+    // std::vector<std::pair<std::pair<int,int>, double>> hbn;
     
-    while (pairSearch.findNextPair(&pair))
-    {
-    	if (pair.refIndex() != pair.testIndex())
-    	{
-	    checkHB(pair, watersel, oxygenArrayRef, HBVector);
-	    
-    	}
-    }
+    // while (pairSearch.findNextPair(&pair))
+    // {
+    // 	if (pair.refIndex() != pair.testIndex())
+    // 	{
+    // 	    checkHB(pair, watersel, oxygenArrayRef, HBVector);
+    // 	}
+    // }
     
-    while (pairSearchSource.findNextPair(&pair))
-    {
-    	sourceEdges.insert(pair.refIndex());
-    }
+    // while (pairSearchSource.findNextPair(&pair))
+    // {
+    // 	sourceEdges.insert(pair.refIndex());
+    // }
 
-    while (pairSearchSink.findNextPair(&pair))
-    {
-    	sinkEdges.insert(pair.refIndex());
-    }
-
-    
-    
+    // while (pairSearchSink.findNextPair(&pair))
+    // {
+    // 	sinkEdges.insert(pair.refIndex());
+    // }
+  
     dh.startFrame(frnr, fr.time);
-    dh.setPoint(0, HBVector.size());
-    dh.setPoint(1, sourceEdges.size());
-    dh.setPoint(2, sinkEdges.size());
-    dh.setPoint(3, 0/*flow*/);
+    dh.setPoint(0, boost::num_vertices(g));
+    dh.setPoint(1, boost::num_edges(g));
+    dh.setPoint(2, 0);
+    dh.setPoint(3, flow);
     dh.finishFrame();
     // g.clear();
 }

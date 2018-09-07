@@ -55,19 +55,6 @@ struct HydrogenBond
 using Graph = boost::adjacency_list<boost::listS, boost::vecS, boost::directedS,
 				      Atom, HydrogenBond>;
 
-template <typename S>
-void add_bidirectional_edge(int u, int v, S s, Graph &g)
-{
-    auto e1 = boost::add_edge(u, v, s, g).first;
-    auto e2 = boost::add_edge(v, u, s, g).first;
-    g[e1].reverse_edge = e2;
-    g[e2].reverse_edge = e1;
-}
-
-void print_predecessor_path(Graph &g, Traits::vertex_descriptor v);
-double do_max_flow(Graph &g, Graph::vertex_descriptor &source, Graph::vertex_descriptor &sink);
-
-    
 class GraphModule
 {
 public:

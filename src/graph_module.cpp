@@ -1,39 +1,6 @@
 
 #include "graph_module.hpp"
 
-
-void print_predecessor_path(Graph &g, Traits::vertex_descriptor v)
-{
-    using path_t = std::vector<Graph::edge_descriptor>;
-    path_t path;    
-    for(Graph::vertex_descriptor u = g[v].predecessor; u != v; v=u, u=g[v].predecessor)
-    {
-    	std::pair<Graph::edge_descriptor, bool> edge_pair = boost::edge(u,v,g);
-    	path.push_back( edge_pair.first );
-    }
-        
-    std::cout << "Shortest Path from v1 to v6:" << std::endl;
-    for(path_t::reverse_iterator riter = path.rbegin(); riter != path.rend(); ++riter)
-    {
-        Graph::vertex_descriptor u_tmp = boost::source(*riter, g);
-        Graph::vertex_descriptor v_tmp = boost::target(*riter, g);
-        Graph::edge_descriptor e_tmp = boost::edge(u_tmp, v_tmp, g).first;
-	
-    	std::cout << "  " << g[u_tmp].id << " -> " << g[v_tmp].id << "    (weight: " << g[e_tmp].length << ")" << std::endl;
-    }
-}
-
-double do_max_flow(Graph &g, Graph::vertex_descriptor &source, Graph::vertex_descriptor &sink)
-{
-    auto idx = get(&Atom::id, g);
-    auto cap    = get(&HydrogenBond::energy, g);
-    auto rescap = get(&HydrogenBond::residual_energy, g);
-    auto rev = get(&HydrogenBond::reverse_edge, g);
-
-    double flow = boost::boykov_kolmogorov_max_flow(g, cap, rescap, rev, idx, source, sink);
-    return flow;
-}
-
 GraphModule::GraphModule()
 {
     g_ = Graph();
