@@ -33,10 +33,6 @@ using Traits = boost::adjacency_list_traits<boost::listS, boost::vecS, boost::di
 struct Atom
 {
     int id;
-    int resid;
-    std::string name;
-    bool isDonor;
-    bool isWater;
     Traits::vertex_descriptor predecessor;
     double distance;
     boost::default_color_type color;
@@ -44,7 +40,6 @@ struct Atom
 
 struct HydrogenBond
 {
-    int id;
     double length;
     double angle;
     double energy;

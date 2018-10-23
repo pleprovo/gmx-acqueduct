@@ -34,7 +34,13 @@ typedef Alpha_shape_3::Facet		                    Facet;
 typedef Alpha_shape_3::Classification_type                  Classification;
 typedef K::Point_3					    Point_3;
 
-typedef CGAL::Triangulation_vertex_base_with_info_3<unsigned, K>    Vbi;
+struct Info
+{
+    int id;
+    bool isSuperNode = false;
+};
+
+typedef CGAL::Triangulation_vertex_base_with_info_3<Info, K>    Vbi;
 typedef CGAL::Triangulation_data_structure_3<Vbi>                   Tdsi;
 typedef CGAL::Delaunay_triangulation_3<K, Tdsi> DelaunayWithInfo;
 

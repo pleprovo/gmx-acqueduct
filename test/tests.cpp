@@ -10,21 +10,21 @@ int main (int argc, char *argv[])
 
     Graph g;
     GraphModule gm;
-    Atom a1{0, 1, "OW", true, true};
+    Atom a1{0};
     
-    gm.add_vertex(Atom{0, 1, "OW", true, true});
-    gm.add_vertex(Atom{1, 2, "OW", true, true});
-    gm.add_vertex(Atom{2, 3, "OW", true, true});
-    gm.add_vertex(Atom{3, 4, "OW", true, true});
-    gm.add_vertex(Atom{4, 5, "OW", true, true});
-    gm.add_vertex(Atom{5, 6, "OW", true, true});
+    gm.add_vertex(Atom{0});
+    gm.add_vertex(Atom{1});
+    gm.add_vertex(Atom{2});
+    gm.add_vertex(Atom{3});
+    gm.add_vertex(Atom{4});
+    gm.add_vertex(Atom{5});
 
-    gm.add_edge(0, 1, HydrogenBond{0, 3.5, 0.0, 4.0});
-    gm.add_edge(1, 2, HydrogenBond{0, 3.5, 0.0, 4.0});
-    gm.add_edge(1, 3, HydrogenBond{0, 3.5, 0.0, 4.0});
-    gm.add_edge(3, 4, HydrogenBond{0, 3.5, 0.0, 4.0});
-    gm.add_edge(2, 4, HydrogenBond{0, 3.5, 0.0, 4.0});
-    gm.add_edge(4, 5, HydrogenBond{0, 3.5, 0.0, 4.0});
+    gm.add_edge(0, 1, HydrogenBond{3.5, 0.0, 4.0});
+    gm.add_edge(1, 2, HydrogenBond{3.5, 0.0, 4.0});
+    gm.add_edge(1, 3, HydrogenBond{3.5, 0.0, 4.0});
+    gm.add_edge(3, 4, HydrogenBond{3.5, 0.0, 4.0});
+    gm.add_edge(2, 4, HydrogenBond{3.5, 0.0, 4.0});
+    gm.add_edge(4, 5, HydrogenBond{3.5, 0.0, 4.0});
 
     // std::cout <<  " Test Graph : " << std::endl;
     // boost::print_graph(g, boost::get(&Atom::resid, g));
