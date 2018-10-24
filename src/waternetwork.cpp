@@ -80,7 +80,9 @@ double switch_function(double r, double r_on, double r_off)
     double sw = 0.0;
 
     if ( r_off >= r && r >= r_on ) {
-	sw = (pow(pow(r,2)-pow(r_off,2),2)*(pow(r_off,2)+2*pow(r,2)-3*pow(r_on,2)))/pow(pow(r_off,2)-pow(r_on,2),3);
+	sw = pow(pow(r,2)-pow(r_off,2),2);
+	sw *= pow(r_off,2)+2*pow(r,2)-3*pow(r_on,2);
+	sw /= pow(pow(r_off,2)-pow(r_on,2),3);	
     } else if ( r < r_on ) {
 	sw = 1.0;
     }
@@ -96,59 +98,13 @@ double computeEnergy(const double r, const double cosine)
     static float theta_off = 0.003;
     static float r_on = 5.5;
     static float r_off = 6.5;
-    double energy = 0.0;
     double r_switch = switch_function(r, r_on, r_off);
     double theta_switch = 1-switch_function(pow(cosine, 2), theta_on, theta_off); 
-    energy = -((C/pow(r, 6.0))-(D/pow(r, 4.0)))*r_switch*theta_switch*pow(cosine, 4.0);
+    double energy = -((C/pow(r, 6.0))-(D/pow(r, 4.0)));
+    energy *= pow(cosine,4.0);
+    energy *= r_switch;
+    energy *= theta_switch;
     return energy;
-}
-
-
-HydrogenBond computeHB(const rvec acceptor, const rvec donor, const rvec hydrogen)
-{
-    double energy = 0.0;
-    rvec AD, DH;
-    HydrogenBond out;
-    rvec_sub(hydrogen, donor, DH);
-    rvec_sub(acceptor, donor, AD);
-    
-    double r = 10.0*norm(AD);
-    double angle = cos_angle(DH, AD);
-    if ( cos_angle(DH, AD) < -0.52 ) {
-	energy = computeEnergy(r, cos(angle));
-    } else {
-	energy = 0.0;
-    }
-    
-    out.length = r;
-    out.angle = angle;
-    out.energy = energy;
-    
-    return out;
-}
-
-
-void checkHB(const gmx::AnalysisNeighborhoodPair &pair,
-	     const gmx::Selection &waterSelection,
-	     const gmx::ConstArrayRef<int> &mappedIds,
-	     std::vector<HydrogenBond> &edgeVector)
-{
-    auto donor = waterSelection.position(mappedIds.at(pair.testIndex())).x();
-    auto hydrogen1 = waterSelection.position(mappedIds.at(pair.testIndex())+1).x();
-    auto hydrogen2 = waterSelection.position(mappedIds.at(pair.testIndex())+2).x();
-    auto acceptor = waterSelection.position(mappedIds.at(pair.refIndex())).x();
-
-    HydrogenBond out1, out2, out;
-    out1 = computeHB(acceptor, donor, hydrogen1);
-    out2 = computeHB(acceptor, donor, hydrogen2);
-    if (out1.energy > out2.energy) {
-	out = out1;
-    } else {
-	out = out2;
-    }
-    
-    
-    edgeVector.push_back(out);							  
 }
 
 
@@ -400,7 +356,8 @@ WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
 	
 	if (hb.energy > 0.01) {	
 	    add_bidirectional_edge(v1->info().id, v2->info().id, hb, g);
-	    plopVec.push_back(std::pair<>)
+	    plopVec.push_back(std::pair<std::pair<int, int>, double>(
+				  std::pair<int, int>(k,l), hb.energy));
 	}
     }
 

@@ -39,7 +39,6 @@ int main (int argc, char *argv[])
 
     Graph g;
     GraphModule gm;
-    Atom a1{0};
     
     gm.add_vertex(Atom{0});
     gm.add_vertex(Atom{1});
