@@ -66,7 +66,7 @@ set( SOURCE_ALPHASHAPE src/alphashape.cpp
   src/alpha_shape_module.cpp
   src/correlation.cpp)
 
-set( SOURCE_TESTS tests/tests.cpp
+set( SOURCE_TESTS test/tests.cpp
   src/graph_module.cpp
   src/alpha_shape_module.cpp
   src/correlation.cpp)

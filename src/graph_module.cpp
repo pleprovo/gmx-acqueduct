@@ -20,7 +20,9 @@ void GraphModule::add_vertex(const Atom &v)
 void GraphModule::add_edge(const int u, const int v, const HydrogenBond &e)
 {
     auto e1 = boost::add_edge(u, v, e, g_).first;
-    auto e2 = boost::add_edge(v, u, e, g_).first;
+    auto er = e;
+    er.energy = 0.0;
+    auto e2 = boost::add_edge(v, u, er, g_).first;
     g_[e1].reverse_edge = e2;
     g_[e2].reverse_edge = e1;
 }
