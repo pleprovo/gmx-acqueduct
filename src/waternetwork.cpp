@@ -79,11 +79,11 @@ double switch_function(double r, double r_on, double r_off)
 {
     double sw = 0.0;
 
-    if ( r_off >= r && r >= r_on ) {
+    if ( r_off > r && r > r_on ) {
 	sw = pow(pow(r,2)-pow(r_off,2),2);
 	sw *= pow(r_off,2)+2*pow(r,2)-3*pow(r_on,2);
 	sw /= pow(pow(r_off,2)-pow(r_on,2),3);	
-    } else if ( r < r_on ) {
+    } else if ( r <= r_on ) {
 	sw = 1.0;
     }
     return sw;
@@ -94,12 +94,12 @@ double computeEnergy(const double r, const double cosine)
 {
     static float C = 3855; /* epsilon*sigma^6*sqrt(2/3) */
     static float D = 738; /* epsilon*sigma^4*sqrt(2/3) */
-    static float theta_on = 0.025;
-    static float theta_off = 0.003;
+    static float theta_on = 0.25;
+    static float theta_off = 0.0301;
     static float r_on = 5.5;
     static float r_off = 6.5;
     double r_switch = switch_function(r, r_on, r_off);
-    double theta_switch = 1-switch_function(pow(cosine, 2), theta_on, theta_off); 
+    double theta_switch = 1-switch_function(pow(cosine, 2), theta_off, theta_on); 
     double energy = -((C/pow(r, 6.0))-(D/pow(r, 4.0)));
     energy *= pow(cosine,4.0);
     energy *= r_switch;
@@ -194,7 +194,7 @@ void WaterNetwork::initAnalysis(const gmx::TrajectoryAnalysisSettings &settings,
     solvent_.initOriginalIdsToGroup(top.topology(), INDEX_RES);
     nb_water_ = solvent_.posCount()/3;
 
-    makeDonorAcceptorLists(calpha_, top.topology());
+    //makeDonorAcceptorLists(calpha_, top.topology());
     
     /* Init neihborsearch cutoff value */
     // nb1_.setCutoff(cutoff_);
@@ -251,36 +251,36 @@ WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
     std::vector<Point_3> sinkVec = fromGmxtoCgalPosition<Point_3>(sinksel.coordinates());
     
     std::vector<int> buriedWaterVector;
-    
+
+    std::cout << " ------------------ " << std::endl;
+    std::cout << " ------------------ " << std::endl;
     /* Alpha shape computation */
     /* Input : List of points*/
     /* Output : List of point in alpha shape or all points in initial selection*/
-    if (true) {
-	alphaShapeModulePtr_->build(alphaPoints, 1.0);    
-	buriedWaterVector = alphaShapeModulePtr_->locate(oxygenVec, true);
-    } else {
-	buriedWaterVector = std::vector<int>(nb_water_);
-	std::iota(std::begin(buriedWaterVector), std::end(buriedWaterVector), 0);
-    }
-
+    // if (0) {
+    // 	alphaShapeModulePtr_->build(alphaPoints, 1.0);    
+    // 	buriedWaterVector = alphaShapeModulePtr_->locate(oxygenVec, true);
+    // } else {
+    buriedWaterVector = std::vector<int>(nb_water_);
+    std::iota(std::begin(buriedWaterVector), std::end(buriedWaterVector), 0);
+	//}
+    
     /* Triangulation */
     /* Input : List of point */
     /* Output : Triangulation */   
     DelaunayWithInfo DT;
     Graph g;
     int count = 0;
-    HydrogenBond hb;
 
-    for (auto &indice : buriedWaterVector)
-    {
+    for (auto &indice : buriedWaterVector) {
 	DelaunayWithInfo::Vertex_handle vh = DT.insert(oxygenVec.at(indice));
 	vh->info() = Info{count, false};
-	boost::add_vertex(Atom{count}, g);
+	boost::add_vertex(Atom {count}, g);
 	count++;
     }
     
     CGAL_assertion(DT.number_of_vertices() == oxygenVec.size());
-        
+    std::cout << DT.number_of_vertices() << " " << oxygenVec.size() << std::endl;
     DelaunayWithInfo::Vertex_handle Source_handle = DT.insert(sourceVec.at(0));
     Source_handle->info() = Info{count, true};
     boost::add_vertex(Atom{count}, g);
@@ -288,8 +288,7 @@ WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
     DelaunayWithInfo::Vertex_handle Sink_handle = DT.insert(sinkVec.at(0));
     Sink_handle->info() = Info{count, true};
     boost::add_vertex(Atom{count}, g);
-
-
+    
     /* Compute edge enrgy */
     /* Input : Triangulation */
     /* Output : Graph */
@@ -297,22 +296,33 @@ WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
     double distance;
     int k, l;
     DelaunayWithInfo::Vertex_handle v1, v2;
-    std::vector<double> energies(4, 0.0);
+    
     std::vector<std::pair<std::pair<int, int>, double> > plopVec;
     for(DelaunayWithInfo::Finite_edges_iterator ei=DT.finite_edges_begin();
 	ei!=DT.finite_edges_end(); ++ei) {
+	
+	std::cout << " ------------------ " << std::endl;
 	v1 = ei->first->vertex(ei->second);
         v2 = ei->first->vertex(ei->third);
+	std::cout << v1->info().id << " " << v2->info().id << std::endl;
+	std::cout << v1->info().isSuperNode << " " << v2->info().isSuperNode << std::endl;
 
+	HydrogenBond hb{distance, 0.0, 0.0};
+	
 	if (v1->info().isSuperNode or v2->info().isSuperNode) {
+	    
+	    std::cout << "Super " << std::endl;
 	    OO = v1->point()-v2->point();
 	    distance = 10.0*CGAL::sqrt(OO*OO);
+	    hb.angle = 1.0;
 	    hb.energy = computeEnergy(distance, 1.0);
-	    hb.length = distance;
+	    
 	} else {
+	    std::vector<double> energies(4, 0.0);
+	    std::cout << "Normal " << std::endl;
 	    k = buriedWaterVector.at(v1->info().id);
 	    l = buriedWaterVector.at(v2->info().id);
-
+	    std::cout << "Oui !" << std::endl;
 	    OO = oxygenVec.at(k) - oxygenVec.at(l);
 
 	    distance = 10.0*CGAL::sqrt(OO*OO);
@@ -333,17 +343,19 @@ WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
 	    coss.push_back(OH12 * OO);
 	    coss.push_back(OH21 * -OO);
 	    coss.push_back(OH22 * -OO);
-
+	    
+	    std::cout << "cos11 : " << coss.at(0) << ", "
+		      << "cos12 : " << coss.at(1) << ", "
+		      << "cos21 : " << coss.at(2) << ", "
+		      << "cos22 : " << coss.at(3) << std::endl;
+	    
 	    for (unsigned int i = 0; i < coss.size(); i++) {
 		if (coss.at(i) > 0.0) {
 		    energies.at(i) = computeEnergy(distance, coss.at(i));
+		    std::cout << "energy" << i << " : " << energies.at(i) << std::endl;
 		}
 	    }
-	    
 	    auto result = std::max_element(energies.begin(), energies.end());
-	    
-	    hb.energy = *result;
-	    hb.length = distance;
 
 	    int ind = std::distance(energies.begin(), result);
 	    if ( ind < 2 ) {
@@ -351,21 +363,28 @@ WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
 	        temp = k;
 		k = l;
 		l = temp;		
-	    }	       
+	    }
+	    
+	    hb.angle = coss.at(ind);
+	    hb.energy = *result;
 	}
 	
-	if (hb.energy > 0.01) {	
-	    add_bidirectional_edge(v1->info().id, v2->info().id, hb, g);
-	    plopVec.push_back(std::pair<std::pair<int, int>, double>(
-				  std::pair<int, int>(k,l), hb.energy));
-	}
+	std::cout << "Distance : " << hb.length
+		  << ". Angle : " << hb.angle
+		  << ", Energy : " << hb.energy << std::endl;
+	
+	add_bidirectional_edge(v1->info().id, v2->info().id, hb, g);
+	plopVec.push_back(std::pair<std::pair<int, int>, double>(
+			      std::pair<int, int>(v1->info().id, v2->info().id),
+			      hb.energy));
     }
-
+    std::cout << " 0000000000000000000 " << std::endl;
+    
     /* Graph Analysis */
     double flow = do_max_flow(g, Source_handle->info().id, Sink_handle->info().id);
     double flowr = do_max_flow(g, Sink_handle->info().id, Source_handle->info().id);
     double flows = flow - flowr;
-
+    
     /* Output Writing */
     if (frnr == 10) {
     	std::ofstream oss;
@@ -390,11 +409,6 @@ WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
     	oss1 << ofs;
     	oss1.close();
     }
-    
-    // std::cout << "\nBuried : " << buriedWaterVector.size() << " "
-    // 	      << "DT(" << DT.number_of_vertices() << ", " << DT.number_of_edges() << ") "
-    // 	      << "Gr(" << boost::num_vertices(g) << ", " << boost::num_edges(g) << ", "
-    // 	      << "flow : " << flow << ")\n";
 
     dh.startFrame(frnr, fr.time);
     dh.setPoint(0, flow);

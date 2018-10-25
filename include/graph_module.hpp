@@ -31,6 +31,7 @@ using Traits = boost::adjacency_list_traits<boost::listS, boost::vecS, boost::di
 struct Atom
 {
     int id;
+    int atom_id;
     Traits::vertex_descriptor predecessor;
     double distance;
     boost::default_color_type color;
@@ -43,7 +44,6 @@ struct HydrogenBond
     double energy;
     double residual_energy;
     Traits::edge_descriptor reverse_edge;
-    Traits::edge_descriptor reverse_edge_null;
 };
 
 using Graph = boost::adjacency_list<boost::listS, boost::vecS, boost::directedS,
@@ -54,8 +54,8 @@ class GraphModule
 public:
     GraphModule();
     void add_vertex(const Atom &v);
-    void add_edge(const int, const int, const HydrogenBond &e);
-    double max_flow(const int, const int, const std::string);
+    void add_edge(const int, const int, const HydrogenBond &e, const std::string mode = "full");
+    double max_flow(const int, const int);
     void clear();
 private:
     Graph g_;

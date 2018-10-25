@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 
 plt.figure(1)
 mat = loadtxt("potential.dat", dtype=float)   
-plt.imshow(mat)
+plt.imshow(mat, cmap='Reds', aspect="auto", interpolation='none', extent=[0.0, 1.0, 7.0, 2.0])
 
 plt.figure(2)  
 radius = loadtxt("switch_radius.dat",dtype=float)
