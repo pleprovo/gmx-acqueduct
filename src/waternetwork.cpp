@@ -23,6 +23,7 @@ template <typename S>
 void add_bidirectional_edge(int u, int v, S s, Graph &g)
 {
     auto e1 = boost::add_edge(v, u, s, g).first;
+    s.energy = 0.0;
     auto e2 = boost::add_edge(u, v, s, g).first;
     g[e1].reverse_edge = e2;
     g[e2].reverse_edge = e1;
@@ -143,7 +144,7 @@ void WaterNetwork::initOptions(gmx::Options                    *options,
     options->addOption(gmx::SelectionOption("select").store(&solvent_).required()
 		       .defaultSelectionText("Water")
 		       .description("Groups to calculate graph properties (default Water)"));    
-    options->addOption(gmx::SelectionOption("aplha").store(&calpha_).required()
+    options->addOption(gmx::SelectionOption("aplha").store(&calpha_)
 		       .description(""));
     options->addOption(gmx::SelectionOption("source").store(&source_)
 		       .description("Define a group as a source for maximum flow analysis, must be used with -sink option"));
@@ -238,7 +239,7 @@ WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
     const gmx::Selection           &watersel = pdata->parallelSelection(solvent_);
 
     /* Converstion of positions set to cgal point vectors */
-    std::vector<Point_3> alphaPoints = fromGmxtoCgalPosition<Point_3>(calphasel.coordinates());
+    std::vector<Point_3> alphaPoints;
     std::vector<Point_3> watersVec = fromGmxtoCgalPosition<Point_3>(watersel.coordinates());
     std::vector<Point_3> oxygenVec = fromGmxtoCgalPosition<Point_3>(watersel.coordinates(), 3);
     std::vector<Point_3> sourceVec = fromGmxtoCgalPosition<Point_3>(sourcesel.coordinates());
@@ -252,6 +253,7 @@ WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
     /* Input : List of points*/
     /* Output : List of point in alpha shape or all points in initial selection*/
     if (false) {
+	alphaPoints = fromGmxtoCgalPosition<Point_3>(calphasel.coordinates());
     	alphaShapeModulePtr_->build(alphaPoints, 1.0);    
     	buriedWaterVector = alphaShapeModulePtr_->locate(oxygenVec, true);
     } else {
