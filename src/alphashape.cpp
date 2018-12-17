@@ -289,3 +289,4 @@ int main(int argc, char *argv[])
 {
     return gmx::TrajectoryAnalysisCommandLineRunner::runAsMain<AlphaShape>(argc, argv);
 }
+

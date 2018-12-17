@@ -12,8 +12,8 @@ if __name__ == "__main__":
         points, edges, weights, source, sink = read_triangulation(file)
     
     with open('surface.off') as file:
-        vertices, faces = read_off(file)
-
+         vertices, faces = read_off(file)
+         
     plot_mayavi_off(vertices, faces)
     plot_mayavi(points, edges, weights, source, sink)
     

@@ -28,10 +28,9 @@ def plot_mayavi(points, edges, weights, source, sink):
         vq.append(points[edge[1]][1]-points[edge[0]][1])
         wq.append(points[edge[1]][2]-points[edge[0]][2])
     point = points3d(xq, yq, zq, scale_factor=0.1, color=(1.0, 0.0, 0.0))
-    #sources = points3d(source[0], source[1], source[2], scale_factor=0.1, color=(0.0, 1.0, 0.0))
-    #sinks = points3d(sink[0], sink[1], sink[2], scale_factor=0.1, color=(0.0, 0.0, 1.0))
-    flow = quiver3d(xq, yq, zq, uq, vq, wq, scale_mode='scalar', scalars=weights, vmax=weight_max, vmin=0.0, mode='arrow')
-    #mlab.outline()
-    #mlab.show()
+    sources = points3d(source[0], source[1], source[2], scale_factor=0.1, color=(0.0, 1.0, 0.0))
+    sinks = points3d(sink[0], sink[1], sink[2], scale_factor=0.1, color=(0.0, 0.0, 1.0))
+    flow = quiver3d(xq, yq, zq, uq, vq, wq, scale_mode='none', scalars=weights, mode='2ddash')
+    flow.glyph.color_mode = 'color_by_scalar'
     return point, flow, sources, sinks
 

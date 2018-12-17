@@ -23,10 +23,14 @@
 #include <boost/graph/dijkstra_shortest_paths.hpp>
 #include <boost/graph/graph_utility.hpp>
 
+#include <boost/graph/connected_components.hpp>
+#include <boost/graph/subgraph.hpp>
+
 #include <fstream>
 #include <iostream>
 
 using Traits = boost::adjacency_list_traits<boost::listS, boost::vecS, boost::directedS>;
+using Utraits = boost::adjacency_list_traits<boost::listS, boost::vecS, boost::undirectedS>;
 
 struct Atom
 {
@@ -49,16 +53,40 @@ struct HydrogenBond
 using Graph = boost::adjacency_list<boost::listS, boost::vecS, boost::directedS,
 				    Atom, HydrogenBond>;
 
+using Ugraph = boost::adjacency_list<boost::listS, boost::vecS, boost::directedS,
+				     Atom, HydrogenBond>;
+
+using SubGraph = boost::subgraph<Graph>;
+
+class MyVisitor : public boost::default_dfs_visitor
+{
+  public:
+    MyVisitor() : vv(new std::vector<int>()) {}
+
+    void discover_vertex(int v, const Graph &g) const {
+        vv->push_back(g[v].id);
+	std::cout << " Discovered : " << g[v].id << std::endl;
+    }
+
+    std::vector<int> &GetVector() const { return *vv; }
+
+  private:
+    std::vector<int> *vv;
+};
+
 class GraphModule
 {
 public:
     GraphModule();
     void add_vertex(const Atom &v);
     void add_edge(const int, const int, const HydrogenBond &e, const std::string mode = "full");
+    void add_edge1(const int, const int, const HydrogenBond &e);
     double max_flow(const int, const int);
+    std::vector<int> dfs(const int);
     void clear();
 private:
     Graph g_;
+    MyVisitor vis_;
 };
 
 #endif

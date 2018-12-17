@@ -3,6 +3,10 @@
 #include "waternetwork.hpp"
 #include "gromacs/pbcutil/pbc.h"
 
+#include "boost/graph/graphviz.hpp"
+#include "boost/graph/depth_first_search.hpp"
+#include "boost/graph/bellman_ford_shortest_paths.hpp"
+
 #include <iostream>
 #include <fstream>
 #include <limits>
@@ -18,16 +22,20 @@ struct custom_comparator {
     std::less<std::pair<int, int>> less_comparator;
 };
 
+
 /* Graph Stuff */
 template <typename S>
-void add_bidirectional_edge(int u, int v, S s, Graph &g)
+void add_bidirectional_edge(int u, int v, S s, Graph &g, bool direction = false)
 {
     auto e1 = boost::add_edge(v, u, s, g).first;
-    s.energy = 0.0;
+    if (direction) {
+	s.energy = 0.0;
+    }
     auto e2 = boost::add_edge(u, v, s, g).first;
     g[e1].reverse_edge = e2;
     g[e2].reverse_edge = e1;
 }
+
 
 void print_predecessor_path(Graph &g, Traits::vertex_descriptor v)
 {
@@ -48,6 +56,7 @@ void print_predecessor_path(Graph &g, Traits::vertex_descriptor v)
     }
 }
 
+
 double do_max_flow(Graph &g, const int source, const int sink)
 {
     auto idx = get(&Atom::id, g);
@@ -58,6 +67,7 @@ double do_max_flow(Graph &g, const int source, const int sink)
     double flow = boost::boykov_kolmogorov_max_flow(g, cap, rescap, rev, idx, source, sink);
     return flow;
 }
+
 
 /* Gromacs to CGAL convertion function */    
 template <class T>
@@ -107,10 +117,52 @@ double computeEnergy(const double r, const double cosine)
     return energy;
 }
 
+double computeEnergy1(const double r, const double cosine,
+		     const double r_on = 5.5,
+		     const double r_off = 6.5,
+		     const double theta_on = 0.25,
+		     const double theta_off = 0.0301)
+{
+    static float C = 3855; /* epsilon*sigma^6*sqrt(2/3) */
+    static float D = 738; /* epsilon*sigma^4*sqrt(2/3) */
+    // static float theta_on = 0.25;
+    // static float theta_off = 0.0301;
+    // static float r_on = 5.5;
+    // static float r_off = 6.5;
+    double r_switch = switch_function(r, r_on, r_off);
+    double theta_switch = 1-switch_function(pow(cosine, 2), theta_off, theta_on); 
+    double energy = -((C/pow(r, 6.0))-(D/pow(r, 4.0)));
+    energy *= pow(cosine,4.0);
+    energy *= r_switch;
+    energy *= theta_switch;
+    return energy;
+}
+
+template<class EnergyMap, class DistanceMap, class AngleMap>
+class edge_writer {
+public:
+    edge_writer(EnergyMap e, DistanceMap d, AngleMap a) : em(e),dm(d),am(a) {}
+    template <class Edge>
+    void operator()(std::ostream &out, const Edge& e) const {
+	out << "[energy=\"" << em[e]
+	    << "\", distance=\"" << dm[e]
+	    << "\", angle=\"" << am[e]<< "\"]";
+    }
+private:
+    EnergyMap em;
+    DistanceMap dm;
+    AngleMap am;
+};
+
+template<class EnergyMap, class DistanceMap, class AngleMap>
+inline edge_writer<EnergyMap,DistanceMap,AngleMap> 
+make_edge_writer(EnergyMap e,DistanceMap d,AngleMap a) {
+    return edge_writer<EnergyMap,DistanceMap,AngleMap>(e,d,a);
+}
 
 WaterNetwork::WaterNetwork()
     : TrajectoryAnalysisModule("waternetwork", "Water network analysis tool"),
-      cutoff_(0.65)
+      alphavalue_(0.65), lengthon_(5.5), lengthoff_(6.5), angleon_(0.25), angleoff_(0.0301)
 {
     alphaShapeModulePtr_ = std::make_shared<AlphaShapeModule>();
     registerAnalysisDataset(&data_, "avedist");
@@ -141,48 +193,76 @@ void WaterNetwork::initOptions(gmx::Options                    *options,
     options->addOption(gmx::FileNameOption("o").filetype(gmx::eftPlot).outputFile()
 		       .store(&fnDist_).defaultBasename("avedist")
 		       .description("Collection of analysis properties through time"));
+    
     options->addOption(gmx::SelectionOption("select").store(&solvent_).required()
 		       .defaultSelectionText("Water")
 		       .description("Groups to calculate graph properties (default Water)"));    
-    options->addOption(gmx::SelectionOption("aplha").store(&calpha_)
+    options->addOption(gmx::SelectionOption("alpha").store(&calpha_)
+		       .description(""));    
+    options->addOption(gmx::SelectionOption("protein").store(&protein_)
 		       .description(""));
     options->addOption(gmx::SelectionOption("source").store(&source_)
 		       .description("Define a group as a source for maximum flow analysis, must be used with -sink option"));
     options->addOption(gmx::SelectionOption("sink").store(&sink_)
-		       .description("Define a group as a sink for maximum flow analysis, must be used with -source option"));    
-    options->addOption(gmx::DoubleOption("cutoff").store(&cutoff_)
-		       .description("Cutoff for distance calculation (default 0.25 nm)"));
+		       .description("Define a group as a sink for maximum flow analysis, must be used with -source option"));
 
+
+    options->addOption(gmx::DoubleOption("alphavalue").store(&alphavalue_)
+		       .description("Alpha value for alpha shape computation (default 1.0nm)"));
+    options->addOption(gmx::DoubleOption("don").store(&lengthon_)
+		       .description("Distance Cutoff for energy calculation (default 0.25 nm)"));
+    options->addOption(gmx::DoubleOption("doff").store(&lengthoff_)
+		       .description("Distance Cutoff for energy calculation (default 0.25 nm)"));
+    options->addOption(gmx::DoubleOption("aon").store(&angleon_)
+		       .description("Angle cutoff for energy calculation (default cos(90))"));
+    options->addOption(gmx::DoubleOption("aoff").store(&angleoff_)
+		       .description("Angle cutoff for energy calculation (default cos(90))")); 
+
+    
+    //TODO link threshold energy to angle and distance
+    //TODO write surface output
+    //TODO write graph output
+    
     settings->setFlag(gmx::TrajectoryAnalysisSettings::efRequireTop);
     settings->setFlag(gmx::TrajectoryAnalysisSettings::efUseTopX);
 }
 
 
-void makeDonorAcceptorLists(gmx::Selection &selection, t_topology *top)
-{    
-    // std::vector<int> donorIndices;
-    // std::vector<int> acceptorIndices;
-    // std::cout << "Number of atoms : " << numAtoms << std::endl;
-    // std::cout << "Number of residues : " << numGroup << std::endl;
-    // for (unsigned int i = 0; i < numAtoms; i++) {
-    // 	std::string name(*top->atoms.atomname[i]);
-    // 	if (name == "O") {
-    // 	    acceptorIndices.push_back(i);
-    // 	}
-    // 	if (name == "N") {
-    // 	    donorIndices.push_back(i);
-    // 	}
-    // 	if (name == "SG") {
-    // 	    donorIndices.push_back(i);
-    // 	}
-    // 	if (name == "NZ") {
-    // 	    donorIndices.push_back(i);
-    // 	}
-    // }
-    // std::cout << "Number of donor :" << donorIndices.size() << std::endl;
-    // std::cout << "Number of acceptor :" << acceptorIndices.size() << std::endl;
-    
-    // std::cout << std::endl;
+void makeDonorAcceptorLists(gmx::Selection &selection, t_topology *top,
+			    std::vector<std::pair<int, std::string> > &protIndices)
+{
+    std::vector<std::string> names{"NE", "NH1", "NH2", "ND1", "ND2", "OD1", "OD2", "NE1",
+     	    "NE2", "OE1", "OE2", "NZ", "OG", "OG1", "OH", "O", "N", "SG"};
+    // std::vector<std::string> names{"O", "N"};
+    unsigned int numAtoms = selection.posCount();
+    gmx::ConstArrayRef<int> indices = selection.atomIndices();
+
+    for (auto i : indices) {
+    	std::string name(*top->atoms.atomname[i]);
+        auto foo = std::find(names.begin(), names.end(), name);
+	if (foo != names.end()) {
+	    std::string plop(*top->atoms.atomname[i+1]);
+	    protIndices.push_back(std::pair<int, std::string>(i, name));
+	}
+    }
+
+    for (auto plop : protIndices) {
+	if (plop.second == "SG") {
+	    std::cout << plop.first << " "
+		      << plop.second << " "
+		      << *top->atoms.atomname[plop.first+1] <<  std::endl;
+	}
+	if (plop.second == "OG") {
+	    std::cout << plop.first << " "
+		      << plop.second << " "
+		      << *top->atoms.atomname[plop.first+1] <<  std::endl;
+	}
+	if (plop.second == "N") {
+	    std::cout << plop.first << " "
+		      << plop.second << " "
+		      << *top->atoms.atomname[plop.first+1] <<  std::endl;
+	}
+    }
 }
 
 
@@ -194,7 +274,11 @@ void WaterNetwork::initAnalysis(const gmx::TrajectoryAnalysisSettings &settings,
     solvent_.initOriginalIdsToGroup(top.topology(), INDEX_RES);
     nb_water_ = solvent_.posCount()/3;
 
-    //makeDonorAcceptorLists(calpha_, top.topology());
+    std::cout << "Yay !" << std::endl;
+    if (protein_.isValid()) {
+	makeDonorAcceptorLists(protein_, top.topology(), protIndices_);
+    }
+    std::cout << "Yay !" << std::endl;
     
     /* Init neihborsearch cutoff value */
     // nb1_.setCutoff(cutoff_);
@@ -209,7 +293,7 @@ void WaterNetwork::initAnalysis(const gmx::TrajectoryAnalysisSettings &settings,
     }
 
     /* Set the number of column to store time dependent data */
-    data_.setColumnCount(0, 4);
+    data_.setColumnCount(0, 5);
 
     /* Init the average module  */ 
     avem_.reset(new gmx::AnalysisDataAverageModule());
@@ -225,6 +309,22 @@ void WaterNetwork::initAnalysis(const gmx::TrajectoryAnalysisSettings &settings,
         //plotm->setYLabel("Distance (nm)");
         data_.addModule(plotm);
     }
+    outfilebinary = std::ofstream("file.binary", std::ios::out | std::ios::binary);
+    outfilenormal = std::ofstream("file.dat", std::ios::out);
+
+    /* Test the hydrogen bonds calculation */	
+    double distance = 3.0;
+    CGAL::Vector_3<K> OO{1.0, 0.0, 0.0};
+    CGAL::Vector_3<K> OH;
+    std::vector<double> results;
+    for (int i = 0; i < 100; i++) {
+	double angle = i*M_PI/200;
+	OH = CGAL::Vector_3<K>(cos(angle), sin(angle), 0.0);
+        float cos_angle = OH*OO;
+	results.push_back(computeEnergy(distance, cos_angle));
+	std::cout << results.back() << " ";
+    }
+    std::cout << std::endl;
 }
 
 
@@ -234,28 +334,30 @@ WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
 {
     gmx::AnalysisDataHandle         dh     = pdata->dataHandle(data_);
     const gmx::Selection           &sourcesel = pdata->parallelSelection(source_);
+    // const gmx::Selection           &proteinsel = pdata->parallelSelection(protein_);
     const gmx::Selection           &calphasel = pdata->parallelSelection(calpha_);
     const gmx::Selection           &sinksel = pdata->parallelSelection(sink_);
     const gmx::Selection           &watersel = pdata->parallelSelection(solvent_);
 
     /* Converstion of positions set to cgal point vectors */
     std::vector<Point_3> alphaPoints;
+    // std::vector<Point_3> protVec = fromGmxtoCgalPosition<Point_3>(proteinsel.coordinates());
     std::vector<Point_3> watersVec = fromGmxtoCgalPosition<Point_3>(watersel.coordinates());
     std::vector<Point_3> oxygenVec = fromGmxtoCgalPosition<Point_3>(watersel.coordinates(), 3);
     std::vector<Point_3> sourceVec = fromGmxtoCgalPosition<Point_3>(sourcesel.coordinates());
     std::vector<Point_3> sinkVec = fromGmxtoCgalPosition<Point_3>(sinksel.coordinates());
     
     std::vector<int> buriedWaterVector;
-
-    // std::cout << " ------------------ " << std::endl;
-    // std::cout << " ------------------ " << std::endl;
+    
+    // std::cout << " >>>> Frame Started " << std::endl;
     /* Alpha shape computation */
     /* Input : List of points*/
     /* Output : List of point in alpha shape or all points in initial selection*/
-    if (false) {
+    if (calphasel.isValid()) {
 	alphaPoints = fromGmxtoCgalPosition<Point_3>(calphasel.coordinates());
-    	alphaShapeModulePtr_->build(alphaPoints, 1.0);    
+    	alphaShapeModulePtr_->build(alphaPoints, alphavalue_);    
     	buriedWaterVector = alphaShapeModulePtr_->locate(oxygenVec, true);
+	// std::cout << " >> Alpha Shape done" << std::endl;
     } else {
 	buriedWaterVector = std::vector<int>(nb_water_);
 	std::iota(std::begin(buriedWaterVector), std::end(buriedWaterVector), 0);
@@ -266,36 +368,56 @@ WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
     /* Output : Triangulation */   
     DelaunayWithInfo DT;
     Graph g;
+    Graph gr;
+    Ugraph gu;
+    Graph subg = g;
     int count = 0;
 
     for (auto &indice : buriedWaterVector) {
 	DelaunayWithInfo::Vertex_handle vh = DT.insert(oxygenVec.at(indice));
-	vh->info() = Info{count, false};
+	vh->info() = Info{count, false, std::make_shared<Point_3>(watersVec.at(3*indice+1)),
+			  std::make_shared<Point_3>(watersVec.at(3*indice+2))};
 	boost::add_vertex(Atom {count}, g);
+	boost::add_vertex(Atom {count}, gr);
+	boost::add_vertex(Atom {count}, gu);
 	count++;
     }
     
     CGAL_assertion(DT.number_of_vertices() == oxygenVec.size());
-    
-    // std::cout << DT.number_of_vertices() << " " << oxygenVec.size() << std::endl;
 
+    // for (auto &indice : protIndices_) {
+    // 	DelaunayWithInfo::Vertex_handle vh = DT.insert(protVec.at(indice.first-protVec.size()));
+    // 	vh->info() = Info{count, true};
+    // 	boost::add_vertex(Atom {count}, g);
+    // 	boost::add_vertex(Atom {count}, gr);
+    // 	count++;	
+    // }
+    
+    // std::cout << " >> Triangulation done "<< DT.number_of_vertices()
+    // 	      << " " << oxygenVec.size() << std::endl;
+    
     DelaunayWithInfo::Vertex_handle Source_handle = DT.insert(sourceVec.at(0));
     Source_handle->info() = Info{count, true};
     boost::add_vertex(Atom{count}, g);
+    boost::add_vertex(Atom{count}, gr);
+    boost::add_vertex(Atom {count}, gu);
     count++;
+    
     DelaunayWithInfo::Vertex_handle Sink_handle = DT.insert(sinkVec.at(0));
     Sink_handle->info() = Info{count, true};
     boost::add_vertex(Atom{count}, g);
-    
-    /* Compute edge enrgy */
+    boost::add_vertex(Atom{count}, gr);
+    boost::add_vertex(Atom {count}, gu);
+
+    /* Compute edge energy */
     /* Input : Triangulation */
     /* Output : Graph */
-    CGAL::Vector_3<K> OO, OH11, OH12, OH21, OH22;
+    CGAL::Vector_3<K> OO, OH11, OH12, OH21, OH22, OH1, OH2;
     double distance;
     int k, l;
     DelaunayWithInfo::Vertex_handle v1, v2;
-    
     std::vector<std::pair<std::pair<int, int>, double> > plopVec;
+    std::vector<double> hb_map;
     for(DelaunayWithInfo::Finite_edges_iterator ei=DT.finite_edges_begin();
 	ei!=DT.finite_edges_end(); ++ei) {
 	
@@ -306,29 +428,29 @@ WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
 	// std::cout << v1->info().isSuperNode << " " << v2->info().isSuperNode << std::endl;
 
 	HydrogenBond hb{distance, 0.0, 0.0};
-	
+	bool way = false;
 	if (v1->info().isSuperNode or v2->info().isSuperNode) {
 	    
 	    // std::cout << "Super " << std::endl;
 	    OO = v1->point()-v2->point();
 	    distance = 10.0*CGAL::sqrt(OO*OO);
 	    hb.angle = 1.0;
-	    hb.energy = computeEnergy(distance, 1.0);
+	    hb.energy = computeEnergy(distance, hb.angle);
 	    
 	} else {
 	    std::vector<double> energies(4, 0.0);
 	    // std::cout << "Normal " << std::endl;
 	    k = buriedWaterVector.at(v1->info().id);
 	    l = buriedWaterVector.at(v2->info().id);
-	    OO = oxygenVec.at(k) - oxygenVec.at(l);
-
+	    OO = v1->point() - v2->point();
+	    
 	    distance = 10.0*CGAL::sqrt(OO*OO);
-	
-	    OH11 = watersVec.at(3*k+1) - oxygenVec.at(k);
-	    OH12 = watersVec.at(3*k+2) - oxygenVec.at(k);
-	    OH21 = watersVec.at(3*l+1) - oxygenVec.at(l);
-	    OH22 = watersVec.at(3*l+2) - oxygenVec.at(l);
 
+	    OH11 = *v1->info().h1 - v1->point();
+	    OH12 = *v1->info().h2 - v1->point();
+	    OH21 = *v2->info().h1 - v2->point();
+	    OH22 = *v2->info().h2 - v2->point();
+	    
 	    OO = OO / CGAL::sqrt(OO*OO);
 	    OH11 = OH11 / CGAL::sqrt(OH11*OH11);
 	    OH12 = OH12 / CGAL::sqrt(OH12*OH12);
@@ -359,35 +481,98 @@ WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
 		int temp;
 	        temp = k;
 		k = l;
-		l = temp;		
+		l = temp;
+		way = true;
 	    }
 	    hb.length = distance;
 	    hb.angle = coss.at(ind);
 	    hb.energy = *result;
 	}
 
-	if ( hb.energy > 0.001 ) {
+	if ( hb.energy != 0.0 ) {
 	    // std::cout << "Distance : " << hb.length
 	    // 	      << ". Angle : " << hb.angle
 	    // 	      << ", Energy : " << hb.energy << std::endl;
+	    if (way) {
+		add_bidirectional_edge(v1->info().id, v2->info().id, hb, g, false);
+		add_bidirectional_edge(v1->info().id, v2->info().id, hb, gr, true);
+		plopVec.push_back(std::pair<std::pair<int, int>, double>(
+				      std::pair<int, int>(v1->info().id, v2->info().id),
+				      hb.energy));
+		hb_map.push_back(hb.energy);
+	    } else {
+		add_bidirectional_edge(v2->info().id, v1->info().id, hb, g, false);
+		add_bidirectional_edge(v2->info().id, v1->info().id, hb, gr, true);
+		plopVec.push_back(std::pair<std::pair<int, int>, double>(
+				      std::pair<int, int>(v2->info().id, v1->info().id),
+				      hb.energy));
+		hb_map.push_back(hb.energy);
+	    }
+	    boost::add_edge(v1->info().id, v2->info().id, hb, gu);
 	
-	    add_bidirectional_edge(v1->info().id, v2->info().id, hb, g);
-	    plopVec.push_back(std::pair<std::pair<int, int>, double>(
-				  std::pair<int, int>(v1->info().id, v2->info().id),
-				  hb.energy));
 	}
     }
-    // std::cout << " 0000000000000000000 " << std::endl;
+    
+    // std::cout << " >> Energies done " << std::endl;
     
     /* Graph Analysis */
-    double flow = do_max_flow(g, Source_handle->info().id, Sink_handle->info().id);
-    double flowr = do_max_flow(g, Sink_handle->info().id, Source_handle->info().id);
-    double flows = flow - flowr;
+    double flow = do_max_flow(g, Source_handle->info().id, Sink_handle->info().id);    
+    double flowf = do_max_flow(gr, Source_handle->info().id, Sink_handle->info().id);
+    double flowb = do_max_flow(gr, Sink_handle->info().id, Source_handle->info().id);
+    
+    // std::cout << " >> Flow done " << flow << " " << flowf << " " << flowb << std::endl;
+    
+    /* Connected Component */
+    std::vector<int> component (boost::num_vertices (g));
+    size_t num_components = boost::connected_components (g, component.data()/*&component[0]*/);
 
-    // std::cout << " 1111111111111111111 " << std::endl;
+    // if (component.at(Source_handle->info().id) != component.at(Sink_handle->info().id)) {
+    // 	std::cout << " Number of Components : " << num_components 
+    // 		  << ", Component source : " << component.at(Source_handle->info().id)
+    // 		  << ", Component sink : " << component.at(Sink_handle->info().id) << std::endl;
+    // }
+    
+    int component_size = 0;
+    int component_ind = component.at(Source_handle->info().id);
+    for (int i = 0; i < component.size(); i++) {
+    	if (component.at(i) == component_ind) {
+    	    // boost::add_vertex(Atom{i}, subg);
+    	    // auto iter = boost::adjacent_vertices(i, g);
+	    component_size++;
+    	}
+    }
+    
+    int N = num_vertices(gr);
+    std::vector<Graph::vertex_descriptor> pred(N, Graph::null_vertex()); 
+    std::vector<int> dist(N, (std::numeric_limits < short >::max)());
+    bool r = boost::bellman_ford_shortest_paths
+    	(gr, N, boost::weight_map(get(&HydrogenBond::energy, gr)).distance_map(dist.data()).
+    	 predecessor_map(pred.data()));
+
+    // for (auto &elem : dist) {
+    // 	std::cout << elem << " "; 
+    // }
+    // std::cout << "\n";
+    
+    // std::cout << " >> Components done " << component_size << std::endl;
     
     /* Output Writing */
-    if (frnr == 10) {
+    
+    // boost::write_graphviz(outfilebinary, gr,
+    // 			  boost::make_label_writer(get(&Atom::id, gr)),
+    // 			  make_edge_writer(get(&HydrogenBond::energy, gr),
+    // 					   get(&HydrogenBond::length,gr),
+    // 					   get(&HydrogenBond::angle, gr)));
+    
+    
+    // boost::write_graphviz(outfilenormal, gr,
+    // 			  boost::make_label_writer(get(&Atom::id, gr)),
+    // 			  make_edge_writer(get(&HydrogenBond::energy, gr),
+    // 					   get(&HydrogenBond::length,gr),
+    // 					   get(&HydrogenBond::angle, gr)));
+    
+	
+    if (frnr == 100) {
     	std::ofstream oss;
     	oss.open("triangulation.dat");
     	oss << boost::num_vertices(g) << " " << boost::num_edges(g) << "\n";
@@ -395,27 +580,31 @@ WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
     	    vi!=DT.vertices_end(); vi++) {
     	    oss << vi->point() << "\n";
     	}
-	
+    
     	for (auto &elem : plopVec) {
     	    oss << elem.first.first << " " << elem.first.second << " " << elem.second << "\n";
     	}
     	oss << Source_handle->point() << "\n";
     	oss << Sink_handle->point() << "\n";
     	oss.close();
-
-        // std::ofstream oss1;
-    	// std::string ofs;
-    	// oss1.open("surface.off");
-    	// alphaShapeModulePtr_->writeOff(ofs);
-    	// oss1 << ofs;
-    	// oss1.close();
+    	if (calphasel.isValid()) {
+    	    std::ofstream oss1;
+    	    std::string ofs;
+    	    oss1.open("surface.off");
+    	    alphaShapeModulePtr_->writeOff(ofs);
+    	    oss1 << ofs;
+    	    oss1.close();
+    	}
     }
 
+    // std::cout << " >> Output done" << std::endl; 
+    
     dh.startFrame(frnr, fr.time);
     dh.setPoint(0, flow);
-    dh.setPoint(1, flowr);
-    dh.setPoint(2, flows);
-    dh.setPoint(3, 0.0 /*alphaShapeModulePtr_->volume()*/);
+    dh.setPoint(1, flowf);
+    dh.setPoint(2, flowb);
+    dh.setPoint(3, alphaShapeModulePtr_->volume());
+    dh.setPoint(3, component_size);
     dh.finishFrame();
 }
 
@@ -428,7 +617,8 @@ void WaterNetwork::finishAnalysis(int /*nframes*/)
 
 void WaterNetwork::writeOutput()
 {
-    
+    outfilebinary.close();
+    outfilenormal.close();
 }
 
 

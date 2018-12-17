@@ -65,11 +65,19 @@ private:
     class ModuleData;
     
     std::string fnDist_;
-    double cutoff_;
+    
+    double alphavalue_;
+    double lengthon_;
+    double lengthoff_;
+    double angleon_;
+    double angleoff_;
+
+    
     int nb_water_;
     
     gmx::Selection solvent_;
     gmx::Selection calpha_;
+    gmx::Selection protein_;
     gmx::Selection source_;
     gmx::Selection sink_;
 
@@ -84,6 +92,11 @@ private:
 
     std::shared_ptr<AlphaShapeModule> alphaShapeModulePtr_;
     std::shared_ptr<GraphModule> graphModulePtr_;
+
+    std::vector<std::pair<int, std::string> > protIndices_;
+
+    std::ofstream outfilebinary;
+    std::ofstream outfilenormal;
 };
 
 

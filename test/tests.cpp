@@ -154,6 +154,28 @@ int main (int argc, char *argv[])
     } else {
     	std::cout << " Not HB at all ! " << std::endl;
     }
+
+    GraphModule gm1;
+    gm1.add_vertex(Atom{0});
+    gm1.add_vertex(Atom{1});
+    gm1.add_vertex(Atom{2});
+    gm1.add_vertex(Atom{3});
+    gm1.add_vertex(Atom{4});
+    gm1.add_vertex(Atom{5});
+
+    gm1.add_edge(0, 1, HydrogenBond{3.5, 0.0, 4.0});
+    gm1.add_edge(0, 2, HydrogenBond{3.5, 0.0, 4.0});
+    gm1.add_edge(0, 3, HydrogenBond{3.5, 0.0, 4.0});
+    gm1.add_edge(0, 4, HydrogenBond{3.5, 0.0, 4.0});
+    gm1.add_edge(3, 4, HydrogenBond{3.5, 0.0, 4.0});
+    gm1.add_edge(4, 5, HydrogenBond{3.5, 0.0, 4.0}); 
+
+    std::vector<int> p = gm1.dfs(0);
+
+    for (auto elem : p) {
+	std::cout << elem << " ";
+    }
+    std::cout << std::endl;
     // Testing FFTW
     // int N = data.size();
     // double in[N];

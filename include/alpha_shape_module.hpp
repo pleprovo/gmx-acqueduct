@@ -38,6 +38,9 @@ struct Info
 {
     int id;
     bool isSuperNode = false;
+    std::shared_ptr<Point_3> h1;
+    std::shared_ptr<Point_3> h2;
+    std::shared_ptr<std::vector<Point_3> > hydrogens;
 };
 
 typedef CGAL::Triangulation_vertex_base_with_info_3<Info, K>    Vbi;
