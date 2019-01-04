@@ -37,25 +37,37 @@ void add_bidirectional_edge(int u, int v, S s, Graph &g, bool direction = false)
 }
 
 
-void print_predecessor_path(Graph &g, Traits::vertex_descriptor v)
-{
-    using path_t = std::vector<Graph::edge_descriptor>;
-    path_t path;    
-    for(Graph::vertex_descriptor u = g[v].predecessor; u != v; v=u, u=g[v].predecessor) {
-    	std::pair<Graph::edge_descriptor, bool> edge_pair = boost::edge(u,v,g);
-    	path.push_back( edge_pair.first );
-    }
+// void print_predecessor_path(std::vector<Graph::vertex_descriptor> parent,
+// 			    Traits::vertex_descriptor u,
+// 			    Traits::vertex_descriptor v)
+// {
+//     using path_t = std::vector<Graph::edge_descriptor>;
+//     path_t path;    
+//     for(Graph::vertex_descriptor u = g[v].predecessor; u != v; v=u, u=g[v].predecessor) {
+//     	std::pair<Graph::edge_descriptor, bool> edge_pair = boost::edge(u,v,g);
+//     	path.push_back( edge_pair.first );
+//     }
         
-    std::cout << "Shortest Path from v1 to v6:" << std::endl;
-    for(path_t::reverse_iterator riter = path.rbegin(); riter != path.rend(); ++riter) {
-        Graph::vertex_descriptor u_tmp = boost::source(*riter, g);
-        Graph::vertex_descriptor v_tmp = boost::target(*riter, g);
-        Graph::edge_descriptor e_tmp = boost::edge(u_tmp, v_tmp, g).first;
+//     std::cout << "Shortest Path from v1 to v6:" << std::endl;
+//     for(path_t::reverse_iterator riter = path.rbegin(); riter != path.rend(); ++riter) {
+//         Graph::vertex_descriptor u_tmp = boost::source(*riter, g);
+//         Graph::vertex_descriptor v_tmp = boost::target(*riter, g);
+//         Graph::edge_descriptor e_tmp = boost::edge(u_tmp, v_tmp, g).first;
 	
-    	std::cout << "  " << g[u_tmp].id << " -> " << g[v_tmp].id << "    (weight: " << g[e_tmp].length << ")" << std::endl;
-    }
-}
+//     	std::cout << "  " << g[u_tmp].id << " -> " << g[v_tmp].id << "    (weight: " << g[e_tmp].length << ")" << std::endl;
+//     }
+// }
 
+void printPath(std::vector<Graph::vertex_descriptor> parent, int i, int j)
+{
+    // Base Case : If j is source
+    if (parent[j]==i)
+        return;
+
+    printPath(parent, i, parent.at(j));
+
+    std::cout << j << " ";
+}
 
 double do_max_flow(Graph &g, const int source, const int sink)
 {
@@ -349,7 +361,7 @@ WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
     
     std::vector<int> buriedWaterVector;
     
-    // std::cout << " >>>> Frame Started " << std::endl;
+    std::cout << " >>>> Frame Started " <<  frnr << std::endl;
     /* Alpha shape computation */
     /* Input : List of points*/
     /* Output : List of point in alpha shape or all points in initial selection*/
@@ -393,8 +405,8 @@ WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
     // 	count++;	
     // }
     
-    // std::cout << " >> Triangulation done "<< DT.number_of_vertices()
-    // 	      << " " << oxygenVec.size() << std::endl;
+    std::cout << " >> Triangulation done "<< DT.number_of_vertices()
+     	      << " " << oxygenVec.size() << std::endl;
     
     DelaunayWithInfo::Vertex_handle Source_handle = DT.insert(sourceVec.at(0));
     Source_handle->info() = Info{count, true};
@@ -513,14 +525,14 @@ WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
 	}
     }
     
-    // std::cout << " >> Energies done " << std::endl;
+    std::cout << " >> Energies done " << std::endl;
     
     /* Graph Analysis */
     double flow = do_max_flow(g, Source_handle->info().id, Sink_handle->info().id);    
     double flowf = do_max_flow(gr, Source_handle->info().id, Sink_handle->info().id);
     double flowb = do_max_flow(gr, Sink_handle->info().id, Source_handle->info().id);
     
-    // std::cout << " >> Flow done " << flow << " " << flowf << " " << flowb << std::endl;
+    std::cout << " >> Flow done " << flow << " " << flowf << " " << flowb << std::endl;
     
     /* Connected Component */
     std::vector<int> component (boost::num_vertices (g));
@@ -541,20 +553,37 @@ WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
 	    component_size++;
     	}
     }
-    
-    int N = num_vertices(gr);
-    std::vector<Graph::vertex_descriptor> pred(N, Graph::null_vertex()); 
-    std::vector<int> dist(N, (std::numeric_limits < short >::max)());
-    bool r = boost::bellman_ford_shortest_paths
-    	(gr, N, boost::weight_map(get(&HydrogenBond::energy, gr)).distance_map(dist.data()).
-    	 predecessor_map(pred.data()));
 
     // for (auto &elem : dist) {
     // 	std::cout << elem << " "; 
     // }
     // std::cout << "\n";
     
-    // std::cout << " >> Components done " << component_size << std::endl;
+    std::cout << " >> Components done " << component_size << std::endl;
+    
+    int N = num_vertices(gr);
+    // Init pred vector 
+    std::vector<std::size_t> pred(N);
+    for (int i = 0; i< pred.size(); i++) {
+	pred.at(i) = i;
+    }
+
+    // Init distance vector with source distance to zero
+    std::vector<int> dist(N, (std::numeric_limits < short >::max)());
+    dist[Source_handle->info().id] = 0;
+    
+    bool r = boost::bellman_ford_shortest_paths
+    	(gr, N, boost::weight_map(get(&HydrogenBond::energy, gr)).distance_map(&dist[0]).
+    	 predecessor_map(&pred[0]));
+
+    for (auto &elem : pred ) {
+	std::cout << elem << " ";
+    }
+    std::cout << std::endl;
+    
+    //printPath(pred, Source_handle->info().id, Sink_handle->info().id);
+
+    std::cout << " >> Path done " << std::endl;
     
     /* Output Writing */
     
@@ -572,40 +601,41 @@ WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
     // 					   get(&HydrogenBond::angle, gr)));
     
 	
-    if (frnr == 100) {
-    	std::ofstream oss;
-    	oss.open("triangulation.dat");
-    	oss << boost::num_vertices(g) << " " << boost::num_edges(g) << "\n";
-        for(DelaunayWithInfo::Vertex_iterator vi=DT.vertices_begin();
-    	    vi!=DT.vertices_end(); vi++) {
-    	    oss << vi->point() << "\n";
-    	}
+    // if (frnr == 100) {
+    // 	std::ofstream oss;
+    // 	oss.open("triangulation.dat");
+    // 	oss << boost::num_vertices(g) << " " << boost::num_edges(g) << "\n";
+    //     for(DelaunayWithInfo::Vertex_iterator vi=DT.vertices_begin();
+    // 	    vi!=DT.vertices_end(); vi++) {
+    // 	    oss << vi->point() << "\n";
+    // 	}
     
-    	for (auto &elem : plopVec) {
-    	    oss << elem.first.first << " " << elem.first.second << " " << elem.second << "\n";
-    	}
-    	oss << Source_handle->point() << "\n";
-    	oss << Sink_handle->point() << "\n";
-    	oss.close();
-    	if (calphasel.isValid()) {
-    	    std::ofstream oss1;
-    	    std::string ofs;
-    	    oss1.open("surface.off");
-    	    alphaShapeModulePtr_->writeOff(ofs);
-    	    oss1 << ofs;
-    	    oss1.close();
-    	}
-    }
+    // 	for (auto &elem : plopVec) {
+    // 	    oss << elem.first.first << " " << elem.first.second << " " << elem.second << "\n";
+    // 	}
+    // 	oss << Source_handle->point() << "\n";
+    // 	oss << Sink_handle->point() << "\n";
+    // 	oss.close();
+    // 	if (calphasel.isValid()) {
+    // 	    std::ofstream oss1;
+    // 	    std::string ofs;
+    // 	    oss1.open("surface.off");
+    // 	    alphaShapeModulePtr_->writeOff(ofs);
+    // 	    oss1 << ofs;
+    // 	    oss1.close();
+    // 	}
+    // }
 
-    // std::cout << " >> Output done" << std::endl; 
+    
     
     dh.startFrame(frnr, fr.time);
     dh.setPoint(0, flow);
     dh.setPoint(1, flowf);
     dh.setPoint(2, flowb);
-    dh.setPoint(3, alphaShapeModulePtr_->volume());
+    dh.setPoint(3, 0.0 /*alphaShapeModulePtr_->volume()*/);
     dh.setPoint(3, component_size);
     dh.finishFrame();
+    std::cout << " >> Output done" << std::endl; 
 }
 
 
