@@ -61,12 +61,12 @@ void add_bidirectional_edge(int u, int v, S s, Graph &g, bool direction = false)
 void printPath(std::vector<Graph::vertex_descriptor> parent, int i, int j)
 {
     // Base Case : If j is source
-    if (parent[j]==i)
+    if ( parent.at(j) == i )
         return;
 
     printPath(parent, i, parent.at(j));
 
-    std::cout << j << " ";
+    std::cout << parent.at(j) << " ";
 }
 
 double do_max_flow(Graph &g, const int source, const int sink)
@@ -286,11 +286,9 @@ void WaterNetwork::initAnalysis(const gmx::TrajectoryAnalysisSettings &settings,
     solvent_.initOriginalIdsToGroup(top.topology(), INDEX_RES);
     nb_water_ = solvent_.posCount()/3;
 
-    std::cout << "Yay !" << std::endl;
     if (protein_.isValid()) {
 	makeDonorAcceptorLists(protein_, top.topology(), protIndices_);
     }
-    std::cout << "Yay !" << std::endl;
     
     /* Init neihborsearch cutoff value */
     // nb1_.setCutoff(cutoff_);
@@ -325,18 +323,18 @@ void WaterNetwork::initAnalysis(const gmx::TrajectoryAnalysisSettings &settings,
     outfilenormal = std::ofstream("file.dat", std::ios::out);
 
     /* Test the hydrogen bonds calculation */	
-    double distance = 3.0;
-    CGAL::Vector_3<K> OO{1.0, 0.0, 0.0};
-    CGAL::Vector_3<K> OH;
-    std::vector<double> results;
-    for (int i = 0; i < 100; i++) {
-	double angle = i*M_PI/200;
-	OH = CGAL::Vector_3<K>(cos(angle), sin(angle), 0.0);
-        float cos_angle = OH*OO;
-	results.push_back(computeEnergy(distance, cos_angle));
-	std::cout << results.back() << " ";
-    }
-    std::cout << std::endl;
+    // double distance = 3.0;
+    // CGAL::Vector_3<K> OO{1.0, 0.0, 0.0};
+    // CGAL::Vector_3<K> OH;
+    // std::vector<double> results;
+    // for (int i = 0; i < 100; i++) {
+    // 	double angle = i*M_PI/200;
+    // 	OH = CGAL::Vector_3<K>(cos(angle), sin(angle), 0.0);
+    //     float cos_angle = OH*OO;
+    // 	results.push_back(computeEnergy(distance, cos_angle));
+    // 	std::cout << results.back() << " ";
+    // }
+    // std::cout << std::endl;
 }
 
 
@@ -381,6 +379,7 @@ WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
     DelaunayWithInfo DT;
     Graph g;
     Graph gr;
+    Graph gp;
     Ugraph gu;
     Graph subg = g;
     int count = 0;
@@ -392,6 +391,7 @@ WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
 	boost::add_vertex(Atom {count}, g);
 	boost::add_vertex(Atom {count}, gr);
 	boost::add_vertex(Atom {count}, gu);
+	boost::add_vertex(Atom {count}, gp);
 	count++;
     }
     
@@ -405,14 +405,12 @@ WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
     // 	count++;	
     // }
     
-    std::cout << " >> Triangulation done "<< DT.number_of_vertices()
-     	      << " " << oxygenVec.size() << std::endl;
-    
     DelaunayWithInfo::Vertex_handle Source_handle = DT.insert(sourceVec.at(0));
     Source_handle->info() = Info{count, true};
     boost::add_vertex(Atom{count}, g);
     boost::add_vertex(Atom{count}, gr);
     boost::add_vertex(Atom {count}, gu);
+    boost::add_vertex(Atom {count}, gp);
     count++;
     
     DelaunayWithInfo::Vertex_handle Sink_handle = DT.insert(sinkVec.at(0));
@@ -420,7 +418,11 @@ WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
     boost::add_vertex(Atom{count}, g);
     boost::add_vertex(Atom{count}, gr);
     boost::add_vertex(Atom {count}, gu);
+    boost::add_vertex(Atom {count}, gp);
 
+    // std::cout << " >> Triangulation done "<< DT.number_of_vertices()
+    //  	      << " " << oxygenVec.size() << std::endl;
+    
     /* Compute edge energy */
     /* Input : Triangulation */
     /* Output : Graph */
@@ -512,6 +514,8 @@ WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
 				      std::pair<int, int>(v1->info().id, v2->info().id),
 				      hb.energy));
 		hb_map.push_back(hb.energy);
+		hb.energy *= -1.0;
+		add_bidirectional_edge(v1->info().id, v2->info().id, hb, gp, true);
 	    } else {
 		add_bidirectional_edge(v2->info().id, v1->info().id, hb, g, false);
 		add_bidirectional_edge(v2->info().id, v1->info().id, hb, gr, true);
@@ -519,12 +523,15 @@ WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
 				      std::pair<int, int>(v2->info().id, v1->info().id),
 				      hb.energy));
 		hb_map.push_back(hb.energy);
+		hb.energy *= -1.0;
+		add_bidirectional_edge(v1->info().id, v2->info().id, hb, gp, true);
 	    }
+	    
 	    boost::add_edge(v1->info().id, v2->info().id, hb, gu);
-	
+	    std::cout << hb.energy << ", ";
 	}
     }
-    
+    std::cout << std::endl;
     std::cout << " >> Energies done " << std::endl;
     
     /* Graph Analysis */
@@ -536,7 +543,7 @@ WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
     
     /* Connected Component */
     std::vector<int> component (boost::num_vertices (g));
-    size_t num_components = boost::connected_components (g, component.data()/*&component[0]*/);
+    size_t num_components = boost::connected_components (gu, component.data()/*&component[0]*/);
 
     // if (component.at(Source_handle->info().id) != component.at(Sink_handle->info().id)) {
     // 	std::cout << " Number of Components : " << num_components 
@@ -561,7 +568,7 @@ WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
     
     std::cout << " >> Components done " << component_size << std::endl;
     
-    int N = num_vertices(gr);
+    int N = num_vertices(gu);
     // Init pred vector 
     std::vector<std::size_t> pred(N);
     for (int i = 0; i< pred.size(); i++) {
@@ -569,22 +576,32 @@ WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
     }
 
     // Init distance vector with source distance to zero
-    std::vector<int> dist(N, (std::numeric_limits < short >::max)());
+    std::vector<float> dist(N, (std::numeric_limits < short >::max)());
     dist[Source_handle->info().id] = 0;
-    
-    bool r = boost::bellman_ford_shortest_paths
-    	(gr, N, boost::weight_map(get(&HydrogenBond::energy, gr)).distance_map(&dist[0]).
-    	 predecessor_map(&pred[0]));
-
-    for (auto &elem : pred ) {
-	std::cout << elem << " ";
-    }
+    for (auto &elem : dist ) {
+    	std::cout << elem << " ";
+    }    
     std::cout << std::endl;
     
-    //printPath(pred, Source_handle->info().id, Sink_handle->info().id);
-
-    std::cout << " >> Path done " << std::endl;
-    
+    bool r = boost::bellman_ford_shortest_paths
+    	(gp, N, boost::weight_map(get(&HydrogenBond::energy, gp)).distance_map(&dist[0]).
+    	 predecessor_map(&pred[0]).root_vertex(Sink_handle->info().id));
+    if (r) {
+	for (auto &elem : pred ) {
+	    std::cout << elem << " ";
+	}
+	std::cout << std::endl;
+	for (auto &elem : dist ) {
+	    std::cout << elem << " ";
+	}    
+	std::cout << std::endl;
+	std::cout << " >> Path from " << Source_handle->info().id << " to "
+		  << Sink_handle->info().id << std::endl;
+	printPath(pred, Source_handle->info().id, Sink_handle->info().id);
+	std::cout << " >> Path done " << std::endl;
+    } else {
+	std::cout << " >> Path cycle problem " << std::endl;
+    }
     /* Output Writing */
     
     // boost::write_graphviz(outfilebinary, gr,
