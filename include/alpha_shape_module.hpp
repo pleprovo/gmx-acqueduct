@@ -54,7 +54,6 @@ typedef CGAL::Delaunay_triangulation_3<K, Tdsi> DelaunayWithInfo;
   * are also fiond with CGAL methods.
   */
 
-
 class AlphaShapeModule
 {
 private:
