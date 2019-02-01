@@ -57,19 +57,19 @@ include_directories(include/)
 #file(GLOB SOURCES "src/*.cpp")
 
 set( SOURCE_WATERNETWORK src/waternetwork.cpp
-  src/alpha_shape_module.cpp
+  src/AlphaShapeSearch.cpp
   src/dipole_module.cpp
   src/graph_module.cpp
   src/lifetime_module.cpp
   src/correlation.cpp)
 
 set( SOURCE_ALPHASHAPE src/alphashape.cpp
-  src/alpha_shape_module.cpp
+  src/AlphaShapeSearch.cpp
   src/correlation.cpp)
 
 set( SOURCE_TESTS test/tests.cpp
   src/graph_module.cpp
-  src/alpha_shape_module.cpp
+  src/AlphaShapeSearch.cpp
   src/correlation.cpp)
 
 # Creating entries for all C++ files with "main" routine

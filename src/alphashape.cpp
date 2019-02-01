@@ -42,7 +42,7 @@ AlphaShape::AlphaShape()
     numFrameValue_ = 250;
     registerAnalysisDataset(&waterData_, "aveWater");
     registerAnalysisDataset(&volumeData_, "aveVolume");
-    alphaShapeModulePtr_ = std::make_shared<AlphaShapeModule>();
+    alphaShapeModulePtr_ = std::make_shared<AlphaShapeSearch>();
 }
 
 
@@ -97,6 +97,7 @@ void AlphaShape::initAnalysis(const gmx::TrajectoryAnalysisSettings &settings,
     waterData_.setColumnCount(0, selectionListAlpha_.size());
     volumeData_.setColumnCount(0, selectionListAlpha_.size());
 
+    alphaShapeModulePtr->setAlpha(alphaValue_);
     std::cout << "Using Alpha Value : " << alphaValue_ << std::endl;
     std::cout << "Using persistance value : " << numFrameValue_ << std::endl;
     
@@ -152,8 +153,6 @@ void AlphaShape::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
     waterDataHandle.startFrame(frnr, fr.time);
     volumeDataHandle.startFrame(frnr, fr.time);
 
-    
-    
     for (unsigned int i = 0; i < selectionListAlpha.size(); i++)
     {	
 	gmx::ConstArrayRef<rvec> alphaCoordinates = selectionListAlpha.at(i).coordinates();
@@ -165,10 +164,10 @@ void AlphaShape::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
 	std::vector<int> buriedWaterVector;
 
 	/* Alpha shape computation */
-	alphaShapeModulePtr_->build(alphaPoints, alphaValue_);    
-	buriedWaterVector = alphaShapeModulePtr_->locate(waterPoints, true);	
+	alphaShapeModulePtr_->build(alphaPoints);    
+	buriedWaterVector = alphaShapeModulePtr_->search(waterPoints);	
 	waterDataHandle.setPoint(i, buriedWaterVector.size());
-	volumeDataHandle.setPoint(i, alphaShapeModulePtr_->volume());
+	volumeDataHandle.setPoint(i, alphaShapeModulePtr_->getVolume());
 
 	waterPresence_.push_back(std::vector<bool>(waterPoints.size(), false));
 	for (auto &water : buriedWaterVector)

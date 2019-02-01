@@ -1,36 +1,59 @@
-/*
- *  Class for finding point inside the Alpha Shape Surface
- *  Pierre Leprovost, University of Oulu, Biocenter Oulu
- *  1/10/2015
- */
-
-#include "alpha_shape_module.hpp"
 
 
-AlphaShapeModule::AlphaShapeModule() {}
+#include "AlphaShapeSearch.hpp"
 
-AlphaShapeModule::~AlphaShapeModule() {}
 
-AlphaShapeModule::AlphaShapeModule(const std::vector<Point_3> &pointVector,
-				   const float &alpha)
+
+
+AlphaShapeSearch::AlphaShapeSearch() {}
+
+
+AlphaShapeSearch::~AlphaShapeSearch() {}
+
+
+void AlphaShapeSearch::setAlpha(const float alpha)
 {
-    this->build(pointVector, alpha);
+    this->alpha_ = alpha;
 }
 
-void AlphaShapeModule::build(const std::vector<Point_3> &pointVector,
-				       const float &alpha)
+
+void AlphaShapeSearch::setLocator(const bool locator)
+{
+    this->locator_ = locator;
+}
+
+
+float AlphaShapeSearch::getVolume()
+{
+    float volume = 0;
+
+    for(Alpha_shape_3::Finite_cells_iterator it = alphaShape_->finite_cells_begin(); 
+	it != alphaShape_->finite_cells_end(); it++)
+    {
+        if(alphaShape_->classify(it)==Alpha_shape_3::INTERIOR)
+	{ 
+	    volume += alphaShape_->tetrahedron(it).volume();
+	}
+    }
+
+    return volume;
+}
+
+
+void AlphaShapeSearch::build(const std::vector<Point_3> &pointVector)
 {
     alphaShape_ = std::make_shared<Alpha_shape_3>(pointVector.begin(), pointVector.end());
-    alphaShape_->set_alpha(alpha);
+    alphaShape_->set_alpha(alpha_);
 }
 
-std::vector<int> AlphaShapeModule::locate(const std::vector<Point_3> &pointVector, 
-					  const bool &location = true) const
+
+std::vector<int> AlphaShapeSearch::search(const std::vector<Point_3> &pointVector) const
 {
+    typedef Alpha_shape_3::Classification_type Classification;
     std::vector<int> pointLocated;
     Classification locationClassifier;
 
-    if (location)
+    if (locator_)
     {
         locationClassifier = Alpha_shape_3::INTERIOR;
     }
@@ -50,24 +73,10 @@ std::vector<int> AlphaShapeModule::locate(const std::vector<Point_3> &pointVecto
     return pointLocated;
 }
 
-float AlphaShapeModule::volume()
+
+void AlphaShapeSearch::writeOff(std::string &outputString) 
 {
-    float volume = 0;
-
-    for(Alpha_shape_3::Finite_cells_iterator it = alphaShape_->finite_cells_begin(); 
-	it != alphaShape_->finite_cells_end(); it++)
-    {
-        if(alphaShape_->classify(it)==Alpha_shape_3::INTERIOR)
-	{ 
-	    volume += alphaShape_->tetrahedron(it).volume();
-	}
-    }
-
-    return volume;
-}
-
-void AlphaShapeModule::writeOff(std::string &outputString) 
-{
+    typedef Alpha_shape_3::Facet Facet;
     std::vector<Facet> facets;
     std::stringstream outputStreamPositions;
     std::stringstream outputStreamIndices;

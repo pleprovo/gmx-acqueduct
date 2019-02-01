@@ -176,7 +176,7 @@ WaterNetwork::WaterNetwork()
     : TrajectoryAnalysisModule("waternetwork", "Water network analysis tool"),
       alphavalue_(0.65), lengthon_(5.5), lengthoff_(6.5), angleon_(0.25), angleoff_(0.0301)
 {
-    alphaShapeModulePtr_ = std::make_shared<AlphaShapeModule>();
+    WaterSearchPtr_ = std::make_shared<AlphaShapeSearch>();
     registerAnalysisDataset(&data_, "avedist");
 }
 
@@ -239,13 +239,17 @@ void WaterNetwork::initOptions(gmx::Options                    *options,
     settings->setFlag(gmx::TrajectoryAnalysisSettings::efUseTopX);
 }
 
+struct groupInfo {
+    bool isDonor;
+    int atom;
+    int numberHydrogen;
+};
 
 void makeDonorAcceptorLists(gmx::Selection &selection, t_topology *top,
 			    std::vector<std::pair<int, std::string> > &protIndices)
 {
-    std::vector<std::string> names{"NE", "NH1", "NH2", "ND1", "ND2", "OD1", "OD2", "NE1",
+    std::vector<std::string> atomname{"NE", "NH1", "NH2", "ND1", "ND2", "OD1", "OD2", "NE1",
      	    "NE2", "OE1", "OE2", "NZ", "OG", "OG1", "OH", "O", "N", "SG"};
-    // std::vector<std::string> names{"O", "N"};
     unsigned int numAtoms = selection.posCount();
     gmx::ConstArrayRef<int> indices = selection.atomIndices();
 
@@ -275,6 +279,10 @@ void makeDonorAcceptorLists(gmx::Selection &selection, t_topology *top,
 		      << *top->atoms.atomname[plop.first+1] <<  std::endl;
 	}
     }
+
+    // loop over atoms and find potential donor or acceptor as in the atoms names vector
+    // check is they are protonated by check if they are fullowed by hydrogen or correct number of hydrogen
+    // write a struct containing all those guys and store it into a vector (include water ?) 
 }
 
 
@@ -286,6 +294,8 @@ void WaterNetwork::initAnalysis(const gmx::TrajectoryAnalysisSettings &settings,
     solvent_.initOriginalIdsToGroup(top.topology(), INDEX_RES);
     nb_water_ = solvent_.posCount()/3;
 
+    WaterSearchPtr_->setAlpha(alphavalue_);
+    
     if (protein_.isValid()) {
 	makeDonorAcceptorLists(protein_, top.topology(), protIndices_);
     }
@@ -365,8 +375,8 @@ WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
     /* Output : List of point in alpha shape or all points in initial selection*/
     if (calphasel.isValid()) {
 	alphaPoints = fromGmxtoCgalPosition<Point_3>(calphasel.coordinates());
-    	alphaShapeModulePtr_->build(alphaPoints, alphavalue_);    
-    	buriedWaterVector = alphaShapeModulePtr_->locate(oxygenVec, true);
+    	alphaShapeModulePtr_->build(alphaPoints);    
+    	buriedWaterVector = alphaShapeModulePtr_->search(oxygenVec);
 	// std::cout << " >> Alpha Shape done" << std::endl;
     } else {
 	buriedWaterVector = std::vector<int>(nb_water_);

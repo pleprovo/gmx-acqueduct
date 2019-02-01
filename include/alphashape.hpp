@@ -85,8 +85,7 @@ private:
     std::vector<std::vector<bool> > waterPresence_;
     
     
-    // Customs Modules
-    std::shared_ptr<AlphaShapeModule> alphaShapeModulePtr_;
+    std::shared_ptr<AlphaShapeSearch> alphaShapeModulePtr_;
 
     std::vector<std::ofstream>        outputVectorSurface_;
 };
