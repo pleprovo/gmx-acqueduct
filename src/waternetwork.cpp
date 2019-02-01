@@ -12,6 +12,12 @@
 #include <limits>
 #include <math.h>
 
+struct atomInfo {
+    int index;
+    bool acceptor;
+    int num_hydro;
+};
+
 struct custom_comparator {
     bool operator()(const std::pair<int, int>& a,
                     const std::pair<int, int>& b) const {
@@ -250,39 +256,56 @@ void makeDonorAcceptorLists(gmx::Selection &selection, t_topology *top,
 {
     std::vector<std::string> atomname{"NE", "NH1", "NH2", "ND1", "ND2", "OD1", "OD2", "NE1",
      	    "NE2", "OE1", "OE2", "NZ", "OG", "OG1", "OH", "O", "N", "SG"};
+
+    // std::vector<std::string> names{"O", "N"};
+    std::vector<char> atoms_names {'O', 'N', 'S'};
+    std::vector<atomInfo> donorVector;
+    std::vector<atomInfo> acceptorVector;
+
     unsigned int numAtoms = selection.posCount();
     gmx::ConstArrayRef<int> indices = selection.atomIndices();
 
     for (auto i : indices) {
     	std::string name(*top->atoms.atomname[i]);
-        auto foo = std::find(names.begin(), names.end(), name);
-	if (foo != names.end()) {
-	    std::string plop(*top->atoms.atomname[i+1]);
-	    protIndices.push_back(std::pair<int, std::string>(i, name));
-	}
+        auto foo = std::find(atoms_names.begin(), atoms_names.end(), name[0]);
+	if (foo != atoms_names.end()) {
+	    atomInfo node;
+	    node.index = i;
+	    int j = 1;
+	    node.num_hydro = 0;
+	    std::cout << name << " "
+		      << node.index << " ";
+	    while (std::string(*top->atoms.atomname[i+j])[0] == 'H') {
+	    	node.num_hydro++;
+		std::cout << *top->atoms.atomname[i+j] << " ";
+		j++;
+	    }
+ 	    
+	    std::cout << node.num_hydro << std::endl;
+        }
     }
 
-    for (auto plop : protIndices) {
-	if (plop.second == "SG") {
-	    std::cout << plop.first << " "
-		      << plop.second << " "
-		      << *top->atoms.atomname[plop.first+1] <<  std::endl;
-	}
-	if (plop.second == "OG") {
-	    std::cout << plop.first << " "
-		      << plop.second << " "
-		      << *top->atoms.atomname[plop.first+1] <<  std::endl;
-	}
-	if (plop.second == "N") {
-	    std::cout << plop.first << " "
-		      << plop.second << " "
-		      << *top->atoms.atomname[plop.first+1] <<  std::endl;
-	}
-    }
 
-    // loop over atoms and find potential donor or acceptor as in the atoms names vector
-    // check is they are protonated by check if they are fullowed by hydrogen or correct number of hydrogen
-    // write a struct containing all those guys and store it into a vector (include water ?) 
+
+    // for (auto plop : protIndices) {
+    // 	if (plop.second == "SG") {
+    // 	    std::cout << plop.first << " "
+    // 		      << plop.second << " "
+    // 		      << *top->atoms.atomname[plop.first+1] <<  std::endl;
+    // 	    if 
+    // 	}
+    // 	if (plop.second == "OG") {
+    // 	    std::cout << plop.first << " "
+    // 		      << plop.second << " "
+    // 		      << *top->atoms.atomname[plop.first+1] <<  std::endl;
+    // 	}
+    // 	if (plop.second == "N") {
+    // 	    std::cout << plop.first << " "
+    // 		      << plop.second << " "
+    // 		      << *top->atoms.atomname[plop.first+1] <<  std::endl;
+    // 	}
+    // }
+
 }
 
 
@@ -354,14 +377,16 @@ WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
 {
     gmx::AnalysisDataHandle         dh     = pdata->dataHandle(data_);
     const gmx::Selection           &sourcesel = pdata->parallelSelection(source_);
-    // const gmx::Selection           &proteinsel = pdata->parallelSelection(protein_);
+    const gmx::Selection           &proteinsel = pdata->parallelSelection(protein_);
     const gmx::Selection           &calphasel = pdata->parallelSelection(calpha_);
     const gmx::Selection           &sinksel = pdata->parallelSelection(sink_);
     const gmx::Selection           &watersel = pdata->parallelSelection(solvent_);
 
     /* Converstion of positions set to cgal point vectors */
     std::vector<Point_3> alphaPoints;
-    // std::vector<Point_3> protVec = fromGmxtoCgalPosition<Point_3>(proteinsel.coordinates());
+    if (proteinsel.isValid()) {
+	std::vector<Point_3> protVec = fromGmxtoCgalPosition<Point_3>(proteinsel.coordinates());
+    }
     std::vector<Point_3> watersVec = fromGmxtoCgalPosition<Point_3>(watersel.coordinates());
     std::vector<Point_3> oxygenVec = fromGmxtoCgalPosition<Point_3>(watersel.coordinates(), 3);
     std::vector<Point_3> sourceVec = fromGmxtoCgalPosition<Point_3>(sourcesel.coordinates());
@@ -370,6 +395,7 @@ WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
     std::vector<int> buriedWaterVector;
     
     std::cout << " >>>> Frame Started " <<  frnr << std::endl;
+    
     /* Alpha shape computation */
     /* Input : List of points*/
     /* Output : List of point in alpha shape or all points in initial selection*/
@@ -394,6 +420,17 @@ WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
     Graph subg = g;
     int count = 0;
 
+    // if (proteinsel.isValid()) {
+    // 	for ()
+    // 	DelaunayWithInfo::Vertex_handle vh = DT.insert(oxygenVec.at(indice));
+    // 	vh->info() = Info{count, false, std::make_shared<Point_3>(watersVec.at(3*indice+1)),
+    // 			  std::make_shared<Point_3>(watersVec.at(3*indice+2))};
+    // 	boost::add_vertex(Atom {count}, g);
+    // 	boost::add_vertex(Atom {count}, gr);
+    // 	boost::add_vertex(Atom {count}, gu);
+    // 	count++;
+    // }
+    
     for (auto &indice : buriedWaterVector) {
 	DelaunayWithInfo::Vertex_handle vh = DT.insert(oxygenVec.at(indice));
 	vh->info() = Info{count, false, std::make_shared<Point_3>(watersVec.at(3*indice+1)),
@@ -414,6 +451,9 @@ WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
     // 	boost::add_vertex(Atom {count}, gr);
     // 	count++;	
     // }
+    
+    std::cout << " >> Triangulation done "<< DT.number_of_vertices()
+     	      << " " << oxygenVec.size() << std::endl;
     
     DelaunayWithInfo::Vertex_handle Source_handle = DT.insert(sourceVec.at(0));
     Source_handle->info() = Info{count, true};
@@ -541,7 +581,9 @@ WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
 	    std::cout << hb.energy << ", ";
 	}
     }
+
     std::cout << std::endl;
+
     std::cout << " >> Energies done " << std::endl;
     
     /* Graph Analysis */
@@ -552,8 +594,9 @@ WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
     std::cout << " >> Flow done " << flow << " " << flowf << " " << flowb << std::endl;
     
     /* Connected Component */
-    std::vector<int> component (boost::num_vertices (g));
-    size_t num_components = boost::connected_components (gu, component.data()/*&component[0]*/);
+    // std::vector<int> component (boost::num_vertices (g));
+    // size_t num_components = boost::connected_components (g, component.data()&component[0]);
+
 
     // if (component.at(Source_handle->info().id) != component.at(Sink_handle->info().id)) {
     // 	std::cout << " Number of Components : " << num_components 
@@ -561,15 +604,24 @@ WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
     // 		  << ", Component sink : " << component.at(Sink_handle->info().id) << std::endl;
     // }
     
-    int component_size = 0;
-    int component_ind = component.at(Source_handle->info().id);
-    for (int i = 0; i < component.size(); i++) {
-    	if (component.at(i) == component_ind) {
-    	    // boost::add_vertex(Atom{i}, subg);
-    	    // auto iter = boost::adjacent_vertices(i, g);
-	    component_size++;
-    	}
-    }
+
+    // int component_size = 0;
+    // int component_ind = component.at(Source_handle->info().id);
+    // for (int i = 0; i < component.size(); i++) {
+    // 	if (component.at(i) == component_ind) {
+    // 	    boost::add_vertex(Atom{i}, subg);
+    // 	    auto iter = boost::adjacent_vertices(i, g);
+    // 	    component_size++;
+    // 	}
+    // }
+    
+    // int N = num_vertices(gr);
+    // std::vector<Graph::vertex_descriptor> pred(N, Graph::null_vertex()); 
+    // std::vector<int> dist(N, (std::numeric_limits < short >::max)());
+    // bool r = boost::bellman_ford_shortest_paths
+    // 	(gr, N, boost::weight_map(get(&HydrogenBond::energy, gr)).distance_map(dist.data()).
+    // 	 predecessor_map(pred.data()));
+
 
     // for (auto &elem : dist) {
     // 	std::cout << elem << " "; 
@@ -651,7 +703,7 @@ WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
     // 	    oss1 << ofs;
     // 	    oss1.close();
     // 	}
-    // }
+    //}
 
     
     
@@ -659,8 +711,8 @@ WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
     dh.setPoint(0, flow);
     dh.setPoint(1, flowf);
     dh.setPoint(2, flowb);
-    dh.setPoint(3, 0.0 /*alphaShapeModulePtr_->volume()*/);
-    dh.setPoint(3, component_size);
+    dh.setPoint(3, alphaShapeModulePtr_->volume());
+    dh.setPoint(4, 0.0/*component_size*/);
     dh.finishFrame();
     std::cout << " >> Output done" << std::endl; 
 }
