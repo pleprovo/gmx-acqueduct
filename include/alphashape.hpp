@@ -33,12 +33,16 @@
  * the research papers on the package. Check out http://www.gromacs.org.
  */
 
+
+#ifndef ALPHASHAPE_HPP
+#define ALPHASHAPE_HPP
+
 #include <string>
 #include <vector>
 
-#include "alpha_shape_module.hpp"
-
+#include <gromacs/analysisdata/modules/lifetime.h> 
 #include <gromacs/trajectoryanalysis.h>
+
 
 /*! \brief
  * Template class to serve as a basis for user analysis tools.
@@ -68,7 +72,7 @@ private:
     
     std::string                      filenameWater_;
     std::string                      filenameVolume_;
-    std::string                      filenameSurface_;
+    std::string                      filenameLifetime_;
     std::string                      filenameStats_;
     
     double                           alphaValue_;
@@ -76,21 +80,12 @@ private:
     
     gmx::AnalysisData                waterData_;
     gmx::AnalysisData                volumeData_;
-    
-    std::vector<std::vector<int> > lifetime_;
-    std::vector<std::vector<int> > cumulLifetime_;
-    std::vector<std::vector<int> > tempLifetime_;    
-    std::vector<std::vector<bool> > previousBuried_;
 
-    std::vector<std::vector<bool> > waterPresence_;
-    
-    
-    std::shared_ptr<AlphaShapeSearch> alphaShapeModulePtr_;
-
-    std::vector<std::ofstream>        outputVectorSurface_;
+    gmx::AnalysisData                lifetimeData_;
+    gmx::AnalysisDataLifetimeModulePointer  lifetimeModule_;
 };
 
-
+#endif 
 
 
 

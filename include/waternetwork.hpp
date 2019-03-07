@@ -33,14 +33,17 @@
  * the research papers on the package. Check out http://www.gromacs.org.
  */
 
+#ifndef WATERNETWORK_HPP
+#define WATERNETWORK_HPP
+
 #include <string>
 #include <vector>
 
-#include "alpha_shape_module.hpp"
-#include "graph_module.hpp"
+//#include "AlphaShapeSearch.hpp"
+//#include "graph_module.hpp"
 
 #include <gromacs/trajectoryanalysis.h>
-
+#include "AnalysisInterface.hpp"
 
 /*! \brief
  * Template class to serve as a basis for user analysis tools.
@@ -71,7 +74,6 @@ private:
     double lengthoff_;
     double angleon_;
     double angleoff_;
-
     
     int nb_water_;
     
@@ -89,17 +91,14 @@ private:
     gmx::AnalysisData data_; 
     
     gmx::AnalysisDataAverageModulePointer avem_;
-
-    std::shared_ptr<AlphaShapeModule> alphaShapeModulePtr_;
-    std::shared_ptr<GraphModule> graphModulePtr_;
-
+    
     std::vector<std::pair<int, std::string> > protIndices_;
 
-    std::ofstream outfilebinary;
-    std::ofstream outfilenormal;
+    std::shared_ptr<AnalysisInterface> strategy_;
+    
 };
 
-
+#endif
 
 
 

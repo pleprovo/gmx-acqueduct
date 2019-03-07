@@ -1,4 +1,4 @@
-
+/*
 #include "graph_module.hpp"
 
 GraphModule::GraphModule()
@@ -64,7 +64,8 @@ std::vector<int> GraphModule::dfs(const int source)
     std::vector<int> d(num_vertices(g_));
     
     boost::depth_first_search(g_, vis_, colormap, source);
-     // boost::breadth_first_search(g_, source, 
+    // boost::breadth_first_se
+arch(g_, source, 
      // 				boost::make_bfs_visitor(
      // 				    std::make_pair(boost::record_distances(d, boost::on_tree_edge()), boost::record_predecessors(p.begin(), boost::on_tree_edge()))));
     // std::vector<int> vctr = vis_.GetVector();
@@ -78,4 +79,4 @@ void GraphModule::clear()
 {
     g_.clear();
 }
-
+*/
