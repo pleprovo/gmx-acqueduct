@@ -3,12 +3,12 @@
 #include "AnalysisNeighbors.hpp"
 
 
-void AnalysisNeighbor::initialize(Config config)
+void AnalysisNeighbors::initialize(Config config)
 {
     
 }
 
-void AnalysisNeighbor::execute(const Frame &frame)
+Results AnalysisNeighbors::execute(const Frame &frame)
 {
 
     /*
@@ -19,10 +19,17 @@ void AnalysisNeighbor::execute(const Frame &frame)
     std::vector<cgal::Point_3> waters = fromGmxtoCgalPosition<cgal::Point_3>(frame.waters.coordinates());
     std::vector<cgal::Point_3> oxygens = fromGmxtoCgalPosition<cgal::Point_3>(frame.waters.coordinates(), 3);
 
-    cgal::Alpha_shape_3 alphaShape(points.begin(), points.end());
-    alphaShape.set_alpha(1.0);
-    std::vector<int> selected = cgal::searchPoints(alphaShape, oxygens);
+    std::vector<int> indices(oxygens.size());
+    std::iota (std::begin(indices), std::end(indices), 0);
 
+    cgal::Kd_tree_3 tree(
+	boost::make_zip_iterator(boost::make_tuple(oxygens.begin(), indices.begin() )),
+	boost::make_zip_iterator(boost::make_tuple(oxygens.end(), indices.end() ) )  
+	);
+    // cgal::Kd_tree_3 tree(oxygens.begin(), oxygens.end());
+    
+    std::vector<int> selected = cgal::searchPoints(tree, points);
+    
     cgal::DelaunayWithInfo DTI;
     for (auto id : selected)
     {
@@ -31,6 +38,8 @@ void AnalysisNeighbor::execute(const Frame &frame)
     }
     
     std::vector<edge> edges = cgal::analyseEdges(DTI);
-    std::cout << "Vertex : " << DTI.number_of_vertices()
-	      << ", Edges : " << edges.size() << std::endl;
+    std::cout << DTI << std::endl;
+    Results results{DTI.number_of_edges(), edges.size()}; 
+    // Results results{selected.size()};     
+    return results;
 }

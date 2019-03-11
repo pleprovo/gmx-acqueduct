@@ -9,6 +9,10 @@
 #include <CGAL/Search_traits_3.h>
 #include <CGAL/Fuzzy_sphere.h>
 
+#include <CGAL/property_map.h>
+#include <boost/iterator/zip_iterator.hpp>
+#include <utility>
+
 struct edge {
     int i;
     int j;
@@ -21,7 +25,8 @@ namespace cgal {
 
     typedef CGAL::Exact_predicates_inexact_constructions_kernel K;
     typedef K::Point_3 Point_3;
-
+    typedef boost::tuple<Point_3,int> Point_and_int;
+    
     struct Node
     {
 	int id;
@@ -42,9 +47,12 @@ namespace cgal {
     typedef CGAL::Delaunay_triangulation_3<K, Tdsi, CGAL::Fast_location > DelaunayWithInfo;
     
     typedef CGAL::Alpha_shape_3<Delaunay>                       Alpha_shape_3;
-
-    typedef CGAL::Kd_tree<CGAL::Search_traits_3<K> >            Kd_tree_3;
-    typedef CGAL::Fuzzy_sphere<CGAL::Search_traits_3<K> >       Fuzzy_sphere_3;
+    typedef CGAL::Search_traits_adapter<Point_and_int,
+					CGAL::Nth_of_tuple_property_map<0, Point_and_int>,
+					CGAL::Search_traits_3<K> >
+    Traits;
+    typedef CGAL::Kd_tree<Traits>            Kd_tree_3;
+    typedef CGAL::Fuzzy_sphere<Traits>       Fuzzy_sphere_3;
     /*
      * Compute the Volume of the Alpha Shape
      */

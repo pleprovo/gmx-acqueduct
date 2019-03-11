@@ -36,16 +36,79 @@ namespace cgal {
 
     std::vector<int> searchPoints(Kd_tree_3 &s, std::vector<Point_3> points)
     {
-	std::vector<int> pointLocated;
-
+	
+	std::set<int> indiceLocated;
+	std::vector<cgal::Point_and_int> neighbors;
 	for (unsigned  int i = 0; i < points.size(); i++)
 	{
-	    Fuzzy_sphere_3 fs(points.at(i), 3.0, 1.0);
-	    //s.search()
+	    Fuzzy_sphere_3 fs(points.at(i), 0.4, 0.2);
+	    s.search(std::inserter(neighbors, neighbors.end ()), fs);
+	    for (auto it : neighbors)
+	    {
+		indiceLocated.insert(boost::get<1>(it));
+	    }
 	}
-
+	// std::cout << neighbors.size() << std::endl;
+	std::vector<int> pointLocated(indiceLocated.begin(), indiceLocated.end());
 	return pointLocated;
     }
+
+    
+    /* Hydrogen Bond stuff */
+    double switch_function(double r, double r_on, double r_off)
+    {
+	double sw = 0.0;
+
+	if ( r_off > r && r > r_on ) {
+	    sw = pow(pow(r,2)-pow(r_off,2),2);
+	    sw *= pow(r_off,2)+2*pow(r,2)-3*pow(r_on,2);
+	    sw /= pow(pow(r_off,2)-pow(r_on,2),3);	
+	} else if ( r <= r_on ) {
+	    sw = 1.0;
+	}
+	return sw;
+    }
+
+
+    double computeEnergy(const double r, const double cosine)
+    {
+	static float C = 3855; /* epsilon*sigma^6*sqrt(2/3) */
+	static float D = 738; /* epsilon*sigma^4*sqrt(2/3) */
+	static float theta_on = 0.25;
+	static float theta_off = 0.0301;
+	static float r_on = 5.5;
+	static float r_off = 6.5;
+	double r_switch = switch_function(r, r_on, r_off);
+	double theta_switch = 1-switch_function(pow(cosine, 2), theta_off, theta_on); 
+	double energy = -((C/pow(r, 6.0))-(D/pow(r, 4.0)));
+	energy *= pow(cosine,4.0);
+	energy *= r_switch;
+	energy *= theta_switch;
+	return energy;
+    }
+
+    
+    double computeEnergy1(const double r, const double cosine,
+			  const double r_on = 5.5,
+			  const double r_off = 6.5,
+			  const double theta_on = 0.25,
+			  const double theta_off = 0.0301)
+    {
+	static float C = 3855; /* epsilon*sigma^6*sqrt(2/3) */
+	static float D = 738; /* epsilon*sigma^4*sqrt(2/3) */
+	// static float theta_on = 0.25;
+	// static float theta_off = 0.0301;
+	// static float r_on = 5.5;
+	// static float r_off = 6.5;
+	double r_switch = switch_function(r, r_on, r_off);
+	double theta_switch = 1-switch_function(pow(cosine, 2), theta_off, theta_on); 
+	double energy = -((C/pow(r, 6.0))-(D/pow(r, 4.0)));
+	energy *= pow(cosine,4.0);
+	energy *= r_switch;
+	energy *= theta_switch;
+	return energy;
+    }
+
     
     std::vector<edge> analyseEdges(DelaunayWithInfo &g)
     {
@@ -83,8 +146,7 @@ namespace cgal {
 	    
 	    for (unsigned int i = 0; i < coss.size(); i++) {
 		if (coss.at(i) > 0.0) {
-		    // energies.at(i) = computeEnergy(distance, coss.at(i));
-		    // std::invoke
+		    energies.at(i) = computeEnergy1(distance, coss.at(i));
 		}
 	    }
 	    
@@ -105,7 +167,7 @@ namespace cgal {
 		e.i = v2->info().id;
 		e.j = v1->info().id;
 	    }
-	    if ( e.length < 3.5 ) {
+	    if ( e.length < 6.0 ) {
 		edges.push_back(e);
 	    }
 	}

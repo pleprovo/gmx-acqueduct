@@ -4,6 +4,7 @@
 #include "gromacs/pbcutil/pbc.h"
 
 #include "AnalysisAlphaShape.hpp"
+#include "AnalysisNeighbors.hpp"
 // #include "graph_module.hpp"
 
 // #include "boost/graph/graphviz.hpp"
@@ -14,18 +15,6 @@
 #include <fstream>
 #include <limits>
 #include <math.h>
-
-
-struct custom_comparator {
-    bool operator()(const std::pair<int, int>& a,
-                    const std::pair<int, int>& b) const {
-        return less_comparator(std::minmax(a.first, a.second),
-                               std::minmax(b.first, b.second));
-    }
-
-    std::less<std::pair<int, int>> less_comparator;
-};
-
 
 /* Graph Stuff */
 
@@ -85,103 +74,57 @@ struct custom_comparator {
 //     return flow;
 // }
 
-
-/* Gromacs to CGAL convertion function */    
-// template <class T>
-// std::vector<T> fromGmxtoCgalPosition(const gmx::ConstArrayRef<rvec> &coordinates,
-// 				     const int increment=1)
-// {
-//     std::vector<T> cgalPositionVector;   
-//     for (unsigned int i = 0; i < coordinates.size(); i += increment) {
-// 	cgalPositionVector.push_back(T(coordinates.at(i)[XX],
-// 				       coordinates.at(i)[YY],
-// 				       coordinates.at(i)[ZZ]));
-//     }
-//     return cgalPositionVector;
-// }
-
-
-/* Hydrogen Bond stuff */
-double switch_function(double r, double r_on, double r_off)
-{
-    double sw = 0.0;
-
-    if ( r_off > r && r > r_on ) {
-	sw = pow(pow(r,2)-pow(r_off,2),2);
-	sw *= pow(r_off,2)+2*pow(r,2)-3*pow(r_on,2);
-	sw /= pow(pow(r_off,2)-pow(r_on,2),3);	
-    } else if ( r <= r_on ) {
-	sw = 1.0;
-    }
-    return sw;
-}
-
-
-double computeEnergy(const double r, const double cosine)
-{
-    static float C = 3855; /* epsilon*sigma^6*sqrt(2/3) */
-    static float D = 738; /* epsilon*sigma^4*sqrt(2/3) */
-    static float theta_on = 0.25;
-    static float theta_off = 0.0301;
-    static float r_on = 5.5;
-    static float r_off = 6.5;
-    double r_switch = switch_function(r, r_on, r_off);
-    double theta_switch = 1-switch_function(pow(cosine, 2), theta_off, theta_on); 
-    double energy = -((C/pow(r, 6.0))-(D/pow(r, 4.0)));
-    energy *= pow(cosine,4.0);
-    energy *= r_switch;
-    energy *= theta_switch;
-    return energy;
-}
-
-double computeEnergy1(const double r, const double cosine,
-		     const double r_on = 5.5,
-		     const double r_off = 6.5,
-		     const double theta_on = 0.25,
-		     const double theta_off = 0.0301)
-{
-    static float C = 3855; /* epsilon*sigma^6*sqrt(2/3) */
-    static float D = 738; /* epsilon*sigma^4*sqrt(2/3) */
-    // static float theta_on = 0.25;
-    // static float theta_off = 0.0301;
-    // static float r_on = 5.5;
-    // static float r_off = 6.5;
-    double r_switch = switch_function(r, r_on, r_off);
-    double theta_switch = 1-switch_function(pow(cosine, 2), theta_off, theta_on); 
-    double energy = -((C/pow(r, 6.0))-(D/pow(r, 4.0)));
-    energy *= pow(cosine,4.0);
-    energy *= r_switch;
-    energy *= theta_switch;
-    return energy;
-}
-
-template<class EnergyMap, class DistanceMap, class AngleMap>
-class edge_writer {
-public:
-    edge_writer(EnergyMap e, DistanceMap d, AngleMap a) : em(e),dm(d),am(a) {}
-    template <class Edge>
-    void operator()(std::ostream &out, const Edge& e) const {
-	out << "[energy=\"" << em[e]
-	    << "\", distance=\"" << dm[e]
-	    << "\", angle=\"" << am[e]<< "\"]";
-    }
-private:
-    EnergyMap em;
-    DistanceMap dm;
-    AngleMap am;
+struct Site {
+    bool isDonor;
+    std::string name;
+    int index;
+    int nbHydrogen;
 };
 
-template<class EnergyMap, class DistanceMap, class AngleMap>
-inline edge_writer<EnergyMap,DistanceMap,AngleMap> 
-make_edge_writer(EnergyMap e,DistanceMap d,AngleMap a) {
-    return edge_writer<EnergyMap,DistanceMap,AngleMap>(e,d,a);
+
+void makeDonorAcceptorLists(gmx::Selection &selection, t_topology *top,
+			    std::vector<std::pair<int, std::string> > &protIndices)
+{
+    std::vector<std::string> atomname{"NE", "NH1", "NH2", "ND1", "ND2", "OD1", "OD2", "NE1",
+     	    "NE2", "OE1", "OE2", "NZ", "OG", "OG1", "OH", "O", "N", "SG"};
+
+    // std::vector<std::string> names{"O", "N"};
+    std::vector<char> atoms_names {'O', 'N', 'S'};
+    std::vector<Site> donorVector;
+    std::vector<Site> acceptorVector;
+
+    gmx::ConstArrayRef<int> indices = selection.atomIndices();
+
+    for (auto i : indices) {
+    	std::string name(*top->atoms.atomname[i]);
+        auto foo = std::find(atoms_names.begin(), atoms_names.end(), name[0]);
+
+	if (foo != atoms_names.end())
+	{
+	    Site site;
+	    site.index = i;
+	    int j = 1;
+	    site.nbHydrogen = 0;
+	    // std::cout << name << " " << site.index << " ";
+	    while (std::string(*top->atoms.atomname[i+j])[0] == 'H')
+	    {
+	    	site.nbHydrogen++;
+		// std::cout << *top->atoms.atomname[i+j] << " ";
+		j++;
+	    }
+ 	    
+	    // std::cout << site.nbHydrogen << std::endl;
+        }
+    }
 }
+
 
 WaterNetwork::WaterNetwork()
     : TrajectoryAnalysisModule("waternetwork", "Water network analysis tool"),
       alphavalue_(0.65), lengthon_(5.5), lengthoff_(6.5), angleon_(0.25), angleoff_(0.0301)
 {
     strategy_ = std::shared_ptr<AnalysisInterface>(new StrategyAlpha);
+    //strategy_ = std::shared_ptr<AnalysisInterface>(new AnalysisNeighbors);
     registerAnalysisDataset(&data_, "avedist");
 }
 
@@ -214,9 +157,9 @@ void WaterNetwork::initOptions(gmx::Options                    *options,
     options->addOption(gmx::SelectionOption("select").store(&solvent_).required()
 		       .defaultSelectionText("Water")
 		       .description("Groups to calculate graph properties (default Water)"));    
-    options->addOption(gmx::SelectionOption("alpha").store(&calpha_)
+    options->addOption(gmx::SelectionOption("alpha").store(&calpha_).required()
 		       .description(""));    
-    options->addOption(gmx::SelectionOption("protein").store(&protein_)
+    options->addOption(gmx::SelectionOption("protein").store(&protein_).required()
 		       .description(""));
     options->addOption(gmx::SelectionOption("source").store(&source_)
 		       .description("Define a group as a source for maximum flow analysis, must be used with -sink option"));
@@ -244,50 +187,6 @@ void WaterNetwork::initOptions(gmx::Options                    *options,
     settings->setFlag(gmx::TrajectoryAnalysisSettings::efUseTopX);
 }
 
-struct Site {
-    bool isDonor;
-    std::string name;
-    int index;
-    int nbHydrogen;
-};
-
-void makeDonorAcceptorLists(gmx::Selection &selection, t_topology *top,
-			    std::vector<std::pair<int, std::string> > &protIndices)
-{
-    std::vector<std::string> atomname{"NE", "NH1", "NH2", "ND1", "ND2", "OD1", "OD2", "NE1",
-     	    "NE2", "OE1", "OE2", "NZ", "OG", "OG1", "OH", "O", "N", "SG"};
-
-    // std::vector<std::string> names{"O", "N"};
-    std::vector<char> atoms_names {'O', 'N', 'S'};
-    std::vector<Site> donorVector;
-    std::vector<Site> acceptorVector;
-
-    gmx::ConstArrayRef<int> indices = selection.atomIndices();
-
-    for (auto i : indices) {
-    	std::string name(*top->atoms.atomname[i]);
-        auto foo = std::find(atoms_names.begin(), atoms_names.end(), name[0]);
-
-	if (foo != atoms_names.end())
-	{
-	    Site site;
-	    site.index = i;
-	    int j = 1;
-	    site.nbHydrogen = 0;
-	    std::cout << name << " "
-		      << site.index << " ";
-	    while (std::string(*top->atoms.atomname[i+j])[0] == 'H')
-	    {
-	    	site.nbHydrogen++;
-		std::cout << *top->atoms.atomname[i+j] << " ";
-		j++;
-	    }
- 	    
-	    std::cout << site.nbHydrogen << std::endl;
-        }
-    }
-}
-
 
 void WaterNetwork::initAnalysis(const gmx::TrajectoryAnalysisSettings &settings,
 				const gmx::TopologyInformation        &top)
@@ -297,8 +196,7 @@ void WaterNetwork::initAnalysis(const gmx::TrajectoryAnalysisSettings &settings,
     solvent_.initOriginalIdsToGroup(top.topology(), INDEX_RES);
     nb_water_ = solvent_.posCount()/3;
 
-    // WaterSearchPtr_->setAlpha(alphavalue_);
-    
+    // WaterSearchPtr_->setAlpha(alphavalue_);   
     if (protein_.isValid()) {
 	makeDonorAcceptorLists(protein_, top.topology(), protIndices_);
     }
@@ -354,7 +252,7 @@ WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
     /*
      * Analyse the frame
      */
-    strategy_->execute(frame);
+    Results results = strategy_->execute(frame);
 
     /*
      * Write Data
@@ -691,8 +589,8 @@ WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
     
     
     dh.startFrame(frnr, fr.time);
-    dh.setPoint(0, 0/*flow*/);
-    dh.setPoint(1, 1/*flowf*/);
+    dh.setPoint(0, results.numVertices/*flow*/);
+    dh.setPoint(1, results.numEdges/*flowf*/);
     dh.setPoint(2, 2/*flowb*/);
     dh.setPoint(3, 3/*alphaShapeModulePtr_->volume()*/);
     dh.setPoint(4, 4/*component_size*/);

@@ -9,7 +9,7 @@ void StrategyAlpha::initialize(Config config)
     
 }
 
-void StrategyAlpha::execute(const Frame &frame)
+Results StrategyAlpha::execute(const Frame &frame)
 {
 
     /*
@@ -30,8 +30,12 @@ void StrategyAlpha::execute(const Frame &frame)
     	cgal::DelaunayWithInfo::Vertex_handle vertex =  DTI.insert(oxygens.at(id));
     	vertex->info() = cgal::Node{3*id, waters.at(3*id+1), waters.at(3*id+2)}; 	
     }
+
+    std::cout << alphaShape << std::endl;
     
     std::vector<edge> edges = cgal::analyseEdges(DTI);
-    std::cout << "Vertex : " << DTI.number_of_vertices()
-	      << ", Edges : " << edges.size() << std::endl;
+
+    Results results{DTI.number_of_vertices(), edges.size()};
+    return results;
+    
 }

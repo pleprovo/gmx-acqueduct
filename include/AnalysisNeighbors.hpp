@@ -7,7 +7,7 @@ class AnalysisNeighbors : public AnalysisInterface
 {
 public:
     void initialize(Config config);
-    void execute(const Frame &frame);
+    Results execute(const Frame &frame);
 };
 
 #endif

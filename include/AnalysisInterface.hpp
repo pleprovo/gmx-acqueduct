@@ -13,6 +13,11 @@ struct Frame {
     const gmx::Selection &proteins; 
 };
 
+struct Results {
+    int numVertices;
+    int numEdges;
+};
+
 template <class T>
 std::vector<T> fromGmxtoCgalPosition(const gmx::ConstArrayRef<rvec> &coordinates,
 				     const int increment=1)
@@ -31,7 +36,7 @@ class AnalysisInterface
 {
 public:
     virtual void initialize(Config config) = 0;
-    virtual void execute(const Frame &frame) = 0;
+    virtual Results execute(const Frame &frame) = 0;
 };
 
 #endif
