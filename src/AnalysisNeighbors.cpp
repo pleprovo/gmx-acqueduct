@@ -15,9 +15,9 @@ Results AnalysisNeighbors::execute(const Frame &frame)
      *Converstion of positions set to cgal point vectors
      */
     std::vector<cgal::Point_3> points = fromGmxtoCgalPosition<cgal::Point_3>(frame.points.coordinates());
-    std::vector<cgal::Point_3> proteins = fromGmxtoCgalPosition<cgal::Point_3>(frame.proteins.coordinates());
-    std::vector<cgal::Point_3> waters = fromGmxtoCgalPosition<cgal::Point_3>(frame.waters.coordinates());
-    std::vector<cgal::Point_3> oxygens = fromGmxtoCgalPosition<cgal::Point_3>(frame.waters.coordinates(), 3);
+    std::vector<cgal::Point_3> proteins = fromGmxtoCgalPosition<cgal::Point_3>(frame.protein.coordinates());
+    std::vector<cgal::Point_3> solvent = fromGmxtoCgalPosition<cgal::Point_3>(frame.solvent.coordinates());
+    std::vector<cgal::Point_3> oxygens = fromGmxtoCgalPosition<cgal::Point_3>(frame.solvent.coordinates(), 3);
 
     std::vector<int> indices(oxygens.size());
     std::iota (std::begin(indices), std::end(indices), 0);
@@ -34,12 +34,11 @@ Results AnalysisNeighbors::execute(const Frame &frame)
     for (auto id : selected)
     {
     	cgal::DelaunayWithInfo::Vertex_handle vertex =  DTI.insert(oxygens.at(id));
-    	vertex->info() = cgal::Node{3*id, waters.at(3*id+1), waters.at(3*id+2)}; 	
+    	vertex->info() = cgal::Node{3*id, solvent.at(3*id+1), solvent.at(3*id+2)}; 	
     }
     
     std::vector<edge> edges = cgal::analyseEdges(DTI);
     std::cout << DTI << std::endl;
-    Results results{DTI.number_of_edges(), edges.size()}; 
-    // Results results{selected.size()};     
+    Results results{DTI.number_of_edges(), edges.size()};     
     return results;
 }

@@ -67,7 +67,8 @@ public:
 private:
     class ModuleData;
     
-    std::string fnDist_;
+    std::string fnFilter_;
+    std::string fnGraph_;
     
     double alphavalue_;
     double lengthon_;
@@ -88,14 +89,15 @@ private:
     gmx::AnalysisNeighborhood nb1_;
     gmx::AnalysisNeighborhood nb2_;
     
-    gmx::AnalysisData data_; 
+    gmx::AnalysisData filterData_; 
+    gmx::AnalysisData graphData_;
     
     gmx::AnalysisDataAverageModulePointer avem_;
-    
-    std::vector<std::pair<int, std::string> > protIndices_;
 
     std::shared_ptr<AnalysisInterface> strategy_;
     
+    std::vector<Site> solventSites_;
+    std::vector<Site> proteinSites_;
 };
 
 #endif

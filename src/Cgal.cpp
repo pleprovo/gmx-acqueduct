@@ -3,6 +3,20 @@
 
 namespace cgal {
 
+    double switch_function(const double r, const double r_on, const double r_off)
+    {
+	double sw = 0.0;
+		
+	if ( r_off > r && r > r_on ) {
+	    sw = pow(pow(r,2)-pow(r_off,2),2);
+	    sw *= pow(r_off,2)+2*pow(r,2)-3*pow(r_on,2);
+	    sw /= pow(pow(r_off,2)-pow(r_on,2),3);	
+	} else if ( r <= r_on ) {
+	    sw = 1.0;
+	}
+	return sw;
+    }
+	
     float getVolume(Alpha_shape_3 &s)
     {
 	float volume = 0;
@@ -52,25 +66,8 @@ namespace cgal {
 	std::vector<int> pointLocated(indiceLocated.begin(), indiceLocated.end());
 	return pointLocated;
     }
-
     
-    /* Hydrogen Bond stuff */
-    double switch_function(double r, double r_on, double r_off)
-    {
-	double sw = 0.0;
-
-	if ( r_off > r && r > r_on ) {
-	    sw = pow(pow(r,2)-pow(r_off,2),2);
-	    sw *= pow(r_off,2)+2*pow(r,2)-3*pow(r_on,2);
-	    sw /= pow(pow(r_off,2)-pow(r_on,2),3);	
-	} else if ( r <= r_on ) {
-	    sw = 1.0;
-	}
-	return sw;
-    }
-
-
-    double computeEnergy(const double r, const double cosine)
+    double computeEnergy1(const double r, const double cosine)
     {
 	static float C = 3855; /* epsilon*sigma^6*sqrt(2/3) */
 	static float D = 738; /* epsilon*sigma^4*sqrt(2/3) */
@@ -88,7 +85,7 @@ namespace cgal {
     }
 
     
-    double computeEnergy1(const double r, const double cosine,
+    double computeEnergy2(const double r, const double cosine,
 			  const double r_on = 5.5,
 			  const double r_off = 6.5,
 			  const double theta_on = 0.25,
@@ -146,7 +143,7 @@ namespace cgal {
 	    
 	    for (unsigned int i = 0; i < coss.size(); i++) {
 		if (coss.at(i) > 0.0) {
-		    energies.at(i) = computeEnergy1(distance, coss.at(i));
+		    energies.at(i) = computeEnergy2(distance, coss.at(i));
 		}
 	    }
 	    
@@ -172,8 +169,17 @@ namespace cgal {
 	    }
 	}
 
-	
 	return edges;
+    }
+    
+
+    
+    void testComputeEdgeEnergy()
+    {
+	add_x add42(42);
+	computeEnergy computeHB();
+	computeEdgeEnergy<computeEnergy, DelaunayWithInfo> computeEdge(computeHB);
+	
     }
 }
 

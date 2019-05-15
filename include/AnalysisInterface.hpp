@@ -7,15 +7,28 @@ struct Config {
     int plop;
 };
 
+struct Site {
+    bool isDonor;
+    std::string name;
+    int index;
+    int resIndex;
+    int nbHydrogen;
+};
+
 struct Frame {
-    const gmx::Selection &waters;
+    const gmx::Selection &protein;
+    const std::vector<Site> &proteinSites;
+    const gmx::Selection &solvent;
+    const std::vector<Site> &solventSites;
     const gmx::Selection &points;
-    const gmx::Selection &proteins; 
+    
+    
 };
 
 struct Results {
     int numVertices;
     int numEdges;
+    float volume;
 };
 
 template <class T>

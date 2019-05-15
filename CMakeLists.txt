@@ -55,12 +55,13 @@ add_definitions(${GROMACS_DEFINITIONS})
 set (CMAKE_CXX_FLAGS "-Wall -O2 -pg -std=c++14 -lfftw3")
 
 # includes and sources
-add_library ( cgal SHARED
-  src/Cgal.cpp )
+add_library ( cgal SHARED src/Cgal.cpp )
 include_directories( cgal PUBLIC include )
 
+add_library ( bgl SHARED src/graph_module.cpp )
+include_directories( bgl PUBLIC include )
+
 include_directories( include )
-#file(GLOB SOURCES "src/*.cpp")
 
 set( SOURCE_WATERNETWORK src/waternetwork.cpp
   src/AnalysisAlphaShape.cpp
@@ -72,13 +73,13 @@ set( SOURCE_TESTS test/tests.cpp )
 
 
 add_executable ( waternetwork ${SOURCE_WATERNETWORK})
-target_link_libraries( waternetwork ${GROMACS_LIBRARIES} cgal )
+target_link_libraries( waternetwork ${GROMACS_LIBRARIES} cgal bgl )
 
 add_executable ( alphashape ${SOURCE_ALPHASHAPE})
 target_link_libraries( alphashape ${GROMACS_LIBRARIES} cgal )
 
 add_executable ( tests ${SOURCE_TESTS} )
-target_link_libraries( tests ${GROMACS_LIBRARIES} cgal fftw3)
+target_link_libraries( tests ${GROMACS_LIBRARIES} cgal bgl fftw3)
 
 enable_testing()
 add_test(NAME tests COMMAND tests)

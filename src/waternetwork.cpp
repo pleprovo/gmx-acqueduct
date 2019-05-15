@@ -74,48 +74,67 @@
 //     return flow;
 // }
 
-struct Site {
-    bool isDonor;
-    std::string name;
-    int index;
-    int nbHydrogen;
-};
 
-
-void makeDonorAcceptorLists(gmx::Selection &selection, t_topology *top,
-			    std::vector<std::pair<int, std::string> > &protIndices)
+int makeSites(gmx::Selection &selection, t_topology *top, std::vector<Site> &sites)
 {
-    std::vector<std::string> atomname{"NE", "NH1", "NH2", "ND1", "ND2", "OD1", "OD2", "NE1",
-     	    "NE2", "OE1", "OE2", "NZ", "OG", "OG1", "OH", "O", "N", "SG"};
-
-    // std::vector<std::string> names{"O", "N"};
-    std::vector<char> atoms_names {'O', 'N', 'S'};
-    std::vector<Site> donorVector;
-    std::vector<Site> acceptorVector;
+    std::vector<std::string> atomNames{
+	"NE",
+	    "NH1",
+	    "NH2",
+	    "ND1",
+	    "ND2",
+	    "OD1",
+	    "OD2",
+	    "NE1",
+     	    "NE2",
+	    "OE1",
+	    "OE2",
+	    "NZ",
+	    "OG",
+	    "OG1",
+	    "OH",
+	    "O",
+	    "N",
+	    "SG",
+	    "OW"};
 
     gmx::ConstArrayRef<int> indices = selection.atomIndices();
+    gmx::ConstArrayRef<int> resIndices = selection.mappedIds();
+    for (int i = 0; i < indices.size(); i++)
+    {
+	int index = i;
+    	std::string name(*top->atoms.atomname[index]);
+        auto foo = std::find(atomNames.begin(), atomNames.end(), name);
 
-    for (auto i : indices) {
-    	std::string name(*top->atoms.atomname[i]);
-        auto foo = std::find(atoms_names.begin(), atoms_names.end(), name[0]);
-
-	if (foo != atoms_names.end())
+	if (foo != atomNames.end())
 	{
 	    Site site;
-	    site.index = i;
-	    int j = 1;
+	    site.index = index;
+	    site.resIndex = resIndices.at(i);
 	    site.nbHydrogen = 0;
-	    // std::cout << name << " " << site.index << " ";
-	    while (std::string(*top->atoms.atomname[i+j])[0] == 'H')
+	    int j = i+1;
+	    bool flag = true;
+	    while (flag)
 	    {
-	    	site.nbHydrogen++;
-		// std::cout << *top->atoms.atomname[i+j] << " ";
-		j++;
+	    	if (j >= indices.size())
+	    	{
+	    	    sites.push_back(site);
+	    	    return sites.size();
+	    	}
+	    	if (std::string(*top->atoms.atomname[j+site.nbHydrogen])[0] == 'H')
+	    	{
+	    	    site.nbHydrogen++;
+	    	    j++;
+	    	}
+	    	else
+	    	{
+	    	    flag=false;
+	    	}
 	    }
- 	    
-	    // std::cout << site.nbHydrogen << std::endl;
-        }
+	    sites.push_back(site);
+	}
     }
+    return sites.size();
 }
 
 
@@ -125,7 +144,8 @@ WaterNetwork::WaterNetwork()
 {
     strategy_ = std::shared_ptr<AnalysisInterface>(new StrategyAlpha);
     //strategy_ = std::shared_ptr<AnalysisInterface>(new AnalysisNeighbors);
-    registerAnalysisDataset(&data_, "avedist");
+    registerAnalysisDataset(&filterData_, "filter");
+    registerAnalysisDataset(&graphData_, "graph");
 }
 
 
@@ -134,7 +154,7 @@ void WaterNetwork::initOptions(gmx::Options                    *options,
 {
     static const char *const desc[] = {
         "This is a template for writing your own analysis tools for",
-        "GROMACS. The advantage of using GROMACS for this is that you",
+	"GROMACS. The advantage of using GROMACS for this is that you",
         "have access to all information in the topology, and your",
         "program will be able to handle all types of coordinates and",
         "trajectory files supported by GROMACS. In addition,",
@@ -150,22 +170,35 @@ void WaterNetwork::initOptions(gmx::Options                    *options,
 
     options->setDescription(desc);
 
-    options->addOption(gmx::FileNameOption("o").filetype(gmx::eftPlot).outputFile()
-		       .store(&fnDist_).defaultBasename("avedist")
+    options->addOption(gmx::FileNameOption("of").filetype(gmx::eftPlot).outputFile()
+		       .store(&fnFilter_).defaultBasename("filter")
+		       .description("Collection of analysis properties through time"));
+
+    options->addOption(gmx::FileNameOption("og").filetype(gmx::eftPlot).outputFile()
+		       .store(&fnGraph_).defaultBasename("graph")
 		       .description("Collection of analysis properties through time"));
     
     options->addOption(gmx::SelectionOption("select").store(&solvent_).required()
-		       .defaultSelectionText("Water")
+		       .defaultSelectionText("SOL")
 		       .description("Groups to calculate graph properties (default Water)"));    
-    options->addOption(gmx::SelectionOption("alpha").store(&calpha_).required()
-		       .description(""));    
+    
     options->addOption(gmx::SelectionOption("protein").store(&protein_).required()
+		       .defaultSelectionText("Protein")
 		       .description(""));
+    options->addOption(gmx::SelectionOption("alpha").store(&calpha_).required()
+		       .defaultSelectionText("Calpha")
+		       .description(""));    
     options->addOption(gmx::SelectionOption("source").store(&source_)
 		       .description("Define a group as a source for maximum flow analysis, must be used with -sink option"));
     options->addOption(gmx::SelectionOption("sink").store(&sink_)
 		       .description("Define a group as a sink for maximum flow analysis, must be used with -source option"));
 
+    const char * const  allowed[] = { "alphashape", "neighbor"};
+    std::string  str;
+    int          filterType;
+    options->addOption(gmx::StringOption("type").enumValue(allowed).store(&str)
+		       .defaultValue("alphashape")
+		       .storeEnumIndex(&filterType));
 
     options->addOption(gmx::DoubleOption("alphavalue").store(&alphavalue_)
 		       .description("Alpha value for alpha shape computation (default 1.0nm)"));
@@ -177,61 +210,74 @@ void WaterNetwork::initOptions(gmx::Options                    *options,
 		       .description("Angle cutoff for energy calculation (default cos(90))"));
     options->addOption(gmx::DoubleOption("aoff").store(&angleoff_)
 		       .description("Angle cutoff for energy calculation (default cos(90))")); 
-
-    
-    //TODO link threshold energy to angle and distance
-    //TODO write surface output
-    //TODO write graph output
     
     settings->setFlag(gmx::TrajectoryAnalysisSettings::efRequireTop);
     settings->setFlag(gmx::TrajectoryAnalysisSettings::efUseTopX);
+
+    /* Display option */
+    std::cout << "Use Filter type : " << str << std::endl;
 }
 
 
 void WaterNetwork::initAnalysis(const gmx::TrajectoryAnalysisSettings &settings,
 				const gmx::TopologyInformation        &top)
 {
-    /* Init Selection */
-
+    /* Make Solvent Sites */
     solvent_.initOriginalIdsToGroup(top.topology(), INDEX_RES);
-    nb_water_ = solvent_.posCount()/3;
-
-    // WaterSearchPtr_->setAlpha(alphavalue_);   
-    if (protein_.isValid()) {
-	makeDonorAcceptorLists(protein_, top.topology(), protIndices_);
+    std::vector<Site> solventSites;
+    if (solvent_.isValid()) {
+    	if (makeSites(solvent_, top.topology(), solventSites_) > 0)
+    	{
+    	    std::clog << "Solvent has : " << solventSites_.size()
+		      << " residues."<< std::endl;
+    	}
     }
-
+    
+    /* Make Protein Sites */
+    protein_.initOriginalIdsToGroup(top.topology(), INDEX_RES);
+    std::vector<Site> proteinSites;
+    if (protein_.isValid()) {
+	if (makeSites(protein_, top.topology(), proteinSites_) > 0)
+	{
+	    std::clog << "Protein has : " << proteinSites_.size()
+		      << " residues." << std::endl;
+	}
+    }
+    
+    /* Filter Type for Analysis */
+    
     /* Set the number of column to store time dependent data */
-    data_.setColumnCount(0, 5);
+    filterData_.setColumnCount(0, 2); 
+    graphData_.setColumnCount(0, 3);
 
     /* Init the average module  */ 
     avem_.reset(new gmx::AnalysisDataAverageModule());
-    data_.addModule(avem_);
+    filterData_.addModule(avem_);
 
     /* Init the Plot module for the time dependent data */
-    if (!fnDist_.empty()) {
+    /* Solvent filtering data */
+    if (!fnFilter_.empty()) {
 	gmx::AnalysisDataPlotModulePointer plotm(
 	    new gmx::AnalysisDataPlotModule(settings.plotSettings()));
-        plotm->setFileName(fnDist_);
+        plotm->setFileName(fnFilter_);
+        plotm->setTitle("Filter Statistics");
+        plotm->setXAxisIsTime();
+        //plotm->setYLabel("Distance (nm)");
+        filterData_.addModule(plotm);
+    }
+
+    /* Init the Plot module for the time dependent data */
+    /* Network Data */
+    if (!fnGraph_.empty()) {
+	gmx::AnalysisDataPlotModulePointer plotm(
+	    new gmx::AnalysisDataPlotModule(settings.plotSettings()));
+        plotm->setFileName(fnGraph_);
         plotm->setTitle("Graph Statistics");
         plotm->setXAxisIsTime();
         //plotm->setYLabel("Distance (nm)");
-        data_.addModule(plotm);
+        graphData_.addModule(plotm);
     }
-
-    /* Test the hydrogen bonds calculation */	
-    // double distance = 3.0;
-    // CGAL::Vector_3<K> OO{1.0, 0.0, 0.0};
-    // CGAL::Vector_3<K> OH;
-    // std::vector<double> results;
-    // for (int i = 0; i < 100; i++) {
-    // 	double angle = i*M_PI/200;
-    // 	OH = CGAL::Vector_3<K>(cos(angle), sin(angle), 0.0);
-    //     float cos_angle = OH*OO;
-    // 	results.push_back(computeEnergy(distance, cos_angle));
-    // 	std::cout << results.back() << " ";
-    // }
-    // std::cout << std::endl;
+    
 }
 
 
@@ -239,59 +285,52 @@ void
 WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
 			   gmx::TrajectoryAnalysisModuleData *pdata)
 {
-    gmx::AnalysisDataHandle         dh     = pdata->dataHandle(data_);
+    gmx::AnalysisDataHandle         filterData = pdata->dataHandle(filterData_);
+    gmx::AnalysisDataHandle         graphData = pdata->dataHandle(graphData_);
     const gmx::Selection           &proteinsel = pdata->parallelSelection(protein_);
     const gmx::Selection           &calphasel = pdata->parallelSelection(calpha_);
-    const gmx::Selection           &watersel = pdata->parallelSelection(solvent_);
+    const gmx::Selection           &solventsel = pdata->parallelSelection(solvent_);
 
+    
     /*
      * Store frame info
      */
-    Frame frame{watersel, calphasel, proteinsel};
+    
+    Frame frame{proteinsel, proteinSites_,
+	    solventsel, solventSites_, calphasel};
 
     /*
      * Analyse the frame
      */
     Results results = strategy_->execute(frame);
+    
+    /* Filter Solvent Sites */
+    /* Choose Filter */
+    // int filtered = filterSolventSite<FilterStrategy>(solventSites, filterSelection);
+    
+    /* Concatenate Protein and Solvent Sites */
+    // sites.insert(sites.end(),
+    // 		 std::make_move_iterator(proteinSites.begin()),
+    // 		 std::make_move_iterator(proteinSites.end()));
+    // sites.insert(sites.end(),
+    // 		 std::make_move_iterator(waterSites.begin()),
+    // 		 std::make_move_iterator(waterSites.end()));
+    
+    /* Make Edges from Sites */
+    // std::vector<Edges> makeEdges<EdgeStrategy>(Sites);
 
-    /*
-     * Write Data
-     */
+    /* Choose Edge evaluator */
+    // std::property_map<Property> evaluateHydrogenbond(Edges);
     
-    
-    
-/* Converstion of positions set to cgal point vectors */
-    // std::vector<Point_3> alphaPoints;
-    // if (proteinsel.isValid()) {
-    // 	std::vector<Point_3> protVec = fromGmxtoCgalPosition<Point_3>(proteinsel.coordinates());
-    // }
-    // std::vector<Point_3> watersVec = fromGmxtoCgalPosition<Point_3>(watersel.coordinates());
-    // std::vector<Point_3> oxygenVec = fromGmxtoCgalPosition<Point_3>(watersel.coordinates(), 3);
-    // std::vector<Point_3> sourceVec = fromGmxtoCgalPosition<Point_3>(sourcesel.coordinates());
-    // std::vector<Point_3> sinkVec = fromGmxtoCgalPosition<Point_3>(sinksel.coordinates());
-    
-    // std::vector<int> buriedWaterVector;
-    
-    // std::cout << " >>>> Frame Started " <<  frnr << std::endl;
-    
-    // /* Alpha shape computation */
-    // /* Input : List of points*/
-    // /* Output : List of point in alpha shape or all points in initial selection*/
-    // if (calphasel.isValid()) {
-    // 	alphaPoints = fromGmxtoCgalPosition<Point_3>(calphasel.coordinates());
-    // 	alphaShapeModulePtr_->build(alphaPoints);    
-    // 	buriedWaterVector = alphaShapeModulePtr_->search(oxygenVec);
-    // 	// std::cout << " >> Alpha Shape done" << std::endl;
-    // } else {
-    // 	buriedWaterVector = std::vector<int>(nb_water_);
-    // 	std::iota(std::begin(buriedWaterVector), std::end(buriedWaterVector), 0);
-    // }
-    
-    // /* Triangulation */
-    // /* Input : List of point */
-    // /* Output : Triangulation */   
-    // DelaunayWithInfo DT;
-    // /*
+    /* Build Graph  */
+    // int success = makeGraph(Sites, Edges, property_map);
+
+    /* Analyse Graph */
+    /* Choose type of analysis */
+
+    /* Write Graph */
+    /* Find a way to write it efficiently */
+   
     // Graph g;
     // Graph gr;
     // Graph gp;
@@ -440,7 +479,7 @@ WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
     // 	    // 	      << ", Energy : " << hb.energy << std::endl;
     // 	    if (way) {
     // 		add_bidirectional_edge(v1->info().id, v2->info().id, hb, g, false);
-    // 		add_bidirectional_edge(v1->info().id, v2->info().id, hb, gr, true);
+     // 		add_bidirectional_edge(v1->info().id, v2->info().id, hb, gr, true);
     // 		plopVec.push_back(std::pair<std::pair<int, int>, double>(
     // 				      std::pair<int, int>(v1->info().id, v2->info().id),
     // 				      hb.energy));
@@ -586,15 +625,17 @@ WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
     // 	}
     //}
 
-    
-    
-    dh.startFrame(frnr, fr.time);
-    dh.setPoint(0, results.numVertices/*flow*/);
-    dh.setPoint(1, results.numEdges/*flowf*/);
-    dh.setPoint(2, 2/*flowb*/);
-    dh.setPoint(3, 3/*alphaShapeModulePtr_->volume()*/);
-    dh.setPoint(4, 4/*component_size*/);
-    dh.finishFrame();
+filterData.startFrame(frnr, fr.time);
+filterData.setPoint(0, results.numVertices);
+filterData.setPoint(1, results.volume);
+filterData.finishFrame();
+
+graphData.startFrame(frnr, fr.time);
+graphData.setPoint(0, results.numEdges);
+graphData.setPoint(1, 1);
+graphData.setPoint(2, 2);
+graphData.finishFrame();
+
     // std::cout << " >> Output done" << std::endl; 
 }
 
