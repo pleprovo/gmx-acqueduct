@@ -53,7 +53,7 @@ class AlphaShape : public gmx::TrajectoryAnalysisModule
 public:
     AlphaShape();
 
-    virtual void initOptions(gmx::Options                    *options,
+    virtual void initOptions(gmx::IOptionsContainer          *options,
 			     gmx::TrajectoryAnalysisSettings *settings);
     virtual void initAnalysis(const gmx::TrajectoryAnalysisSettings &settings,
 			      const gmx::TopologyInformation        &top);
@@ -65,7 +65,7 @@ public:
     virtual void writeOutput();
 
 private:
-    //class ModuleData;
+    class ModuleData;
     
     gmx::SelectionList               selectionListAlpha_;
     gmx::Selection                   selectionWater_;

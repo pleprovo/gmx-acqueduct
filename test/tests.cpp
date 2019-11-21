@@ -2,48 +2,31 @@
 #include <iostream>
 #include <fstream>
 #include <cmath>
+#include <future>
 
-#include "graph_module.hpp"
 #include "Cgal.hpp"
+#include "boost/version.hpp"
 
-/* Hydrogen Bond stuff */
-double switch_function1(double r, double r_on, double r_off)
+#include <chrono>
+
+std::vector<int> sub (std::vector<int> &nums, int start, int stop)
 {
-    double sw = 0.0;
-
-    if ( r_off > r && r > r_on ) {
-	sw = pow(pow(r,2)-pow(r_off,2),2);
-	sw *= (pow(r_off,2)+2*pow(r,2)-3*pow(r_on,2));
-	sw /= pow(pow(r_off,2)-pow(r_on,2),3);
-	    
-    } else if ( r <= r_on ) {
-	sw = 1.0;
+    std::vector<int> list;
+    list.reserve(stop-start+1);
+    for ( int i = start; i < stop; ++i )
+    {
+	list.push_back(i*i);
     }
-    return sw;
+    return list;
 }
-
-
-double computeEnergy1(const double r, const double cosine)
-{
-    static float C = 3855; /* epsilon*sigma^6*sqrt(2/3) */
-    static float D = 738; /* epsilon*sigma^4*sqrt(2/3) */
-    static float theta_on = 0.25;
-    static float theta_off = 0.0301;
-    static float r_on = 5.5;
-    static float r_off = 6.5;
-    double r_switch = switch_function1(r, r_on, r_off);
-    double theta_switch = 1-switch_function1(pow(cosine, 2), theta_off, theta_on); 
-    double energy = -((C/pow(r, 6.0))-(D/pow(r, 4.0)));
-    energy *= pow(cosine, 4.0);
-    energy *= r_switch;
-    energy *= theta_switch;	
-    return energy;
-}
+ 
 
 int main (int argc, char *argv[])
 {
+    using namespace boost;
+    std::cout << "Using BOOST : " << ((BOOST_VERSION / 100) % 1000) << std::endl;
     std::cout << " --- TESTS --- " << std::endl;
-    std::cout << " --- Test Distance Switch : ";
+    std::cout << " --- Test Distance Switch : " << std::flush;
     
     // Testing radius switch
     std::ofstream oss1;
@@ -53,12 +36,12 @@ int main (int argc, char *argv[])
     }
     oss1 << "\n";
     for (double r = 2.0; r < 7.0; r+=0.1) {
-    	oss1 << switch_function1(r, 5.5, 6.5) << " ";
+    	oss1 << cgal::switch_function_radius(r, 5.5, 6.5) << " ";
     }
     oss1.close();
     std::cout << " DONE --- " << std::endl;
     
-    std::cout << " --- Test Angle Switch : ";
+    std::cout << " --- Test Angle Switch : " << std::flush;
     
     // Testing angle switch
     std::ofstream oss2;
@@ -68,86 +51,61 @@ int main (int argc, char *argv[])
     }
     oss2 << "\n";
     for (double cos = 0.0; cos < 1.0; cos+=0.001) {
-    	oss2 << 1-switch_function1(cos, 0.0301, 0.25) << " ";	
+    	oss2 << 1-cgal::switch_function_angle(cos, 0.0301, 0.25) << " ";	
     }
     oss2.close();
     std::cout << " DONE --- " << std::endl;
     
     // Testing Hydrogen Bond potential
-    std::cout << " --- Test Hydrogen Bond Potential : ";
+    std::cout << " --- Test Hydrogen Bond Potential : " << std::flush;
     std::ofstream oss;
     oss.open("potential.dat");
     for (double r = 2.5; r < 7.0; r+=0.001) {
     	for (double theta = 0.0; theta < 1.0; theta+=0.01) {
-    	    oss << computeEnergy1(r, theta) << " " ;
+    	    oss << cgal::computeEnergy(r, theta) << " " ;
     	}
         oss << "\n";
     }
     oss.close();
     std::cout << " DONE --- " << std::endl;
 
-    
-    // Testing water water hb
-    std::cout << " --- Test Hydrogen Bond Potential with CGAL : ";
-    cgal::Point_3 O1(0.0, 0.0, 0.0);
-    cgal::Point_3 H11(1.0, 0.0, 0.0);
-    cgal::Point_3 H12(-0.5, 0.866, 0.0);
-    cgal::Point_3 O2(3.5, 0.0, 0.0);
-    cgal::Point_3 H21(4.5, 0.86, 0.0);
-    cgal::Point_3 H22(4.5, -0.86, 0.0);
-
-    using Vector_3 = CGAL::Vector_3<cgal::K>;
-    
-    Vector_3 O1O2 = O2 - O1;
-    Vector_3 O2O1 = -O1O2;
-    
-    double distance = CGAL::sqrt(O1O2*O1O2);
-    
-    Vector_3 OH11 = H11 - O1;
-    Vector_3 OH12 = H12 - O1;
-    Vector_3 OH21 = H21 - O2;
-    Vector_3 OH22 = H22 - O2;
-
-    O1O2 = O1O2 / CGAL::sqrt(O1O2*O1O2);
-    O2O1 = O2O1 / CGAL::sqrt(O2O1*O2O1);
-    
-    OH11 = OH11 / CGAL::sqrt(OH11*OH11);
-    OH12 = OH12 / CGAL::sqrt(OH12*OH12);
-    OH21 = OH21 / CGAL::sqrt(OH21*OH21);
-    OH22 = OH22 / CGAL::sqrt(OH22*OH22);
-
-    std::vector<double> coss;
-    coss.push_back(OH11 * O1O2);
-    coss.push_back(OH12 * O1O2);
-    coss.push_back(OH21 * O2O1);
-    coss.push_back(OH22 * O2O1);
-
-    std::vector<std::pair<int, double> > energies;
-    for (unsigned int i = 0; i< coss.size(); i++) {
-    	if (coss.at(i) > 0.0) {
-    	    energies.push_back(std::pair<int,double>(i,
-						     computeEnergy1(distance,
-								    coss.at(i))));
-    	}
+    std::cout << " --- Test future : " << std::flush;
+    std::vector<int> nums;
+    for (int i = 0; i < 1000000; ++i)
+    {
+	nums.push_back(i);
     }
+
+    std::chrono::system_clock::time_point start0 = std::chrono::system_clock::now();
+    
+    std::vector<int> resultsingle = sub(nums, 0, nums.size());
+    
+    auto stop0 = std::chrono::system_clock::now();
+    
+    std::cout << "\n" << "Single done in "
+	      << std::chrono::duration_cast<std::chrono::milliseconds>(stop0 - start0).count()
+	      << "ms" <<std::flush;
+
+    auto start1 = std::chrono::system_clock::now();
+    
+    std::future<std::vector<int>> fut = std::async(std::launch::async,
+						   sub,
+						   std::ref(nums), 0, nums.size()/2);
+    std::vector<int> chunk2 = sub(nums, nums.size()/2, nums.size());
+    fut.wait();
+    std::vector<int> chunk1 = fut.get();
+    std::vector<int> results;
+    results.reserve(chunk1.size()+chunk2.size());
+    results.insert(results.end(), chunk1.begin(), chunk1.end());
+    results.insert(results.end(), chunk2.begin(), chunk2.end());
+    
+    auto stop1 = std::chrono::system_clock::now();
+
+    std::cout << "\n" << "Parallel done in "
+	      << std::chrono::duration_cast<std::chrono::milliseconds>(stop1 - start1).count()
+	      << "ms" <<std::flush;
     
     std::cout << " DONE --- " << std::endl;
-    
-// Testing FFTW
-    // int N = data.size();
-    // double in[N];
-    // fftw_complex *out;
-    // fftw_plan fft, ifft;
-
-    // out = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * N);
-    
-    // fft = fftw_plan_dft_r2c_1d(N, in, out, FFTW_FORWARD);
-    
-    // fftw_execute(my_plan);    
-    // fftw_destroy_plan(my_plan);
-    
-    // fftw_free(in);    
-    // fftw_free(out);
-    
+    std::cout << 101 / 4 << " " << 101 % 4 << std::endl;
     return 0;
 }

@@ -2,8 +2,7 @@
 #include "Cgal.hpp"
 
 namespace cgal {
-
-    double switch_function(const double r, const double r_on, const double r_off)
+    double switch_function_radius(const double r, const double r_on, const double r_off)
     {
 	double sw = 0.0;
 		
@@ -11,15 +10,49 @@ namespace cgal {
 	    sw = pow(pow(r,2)-pow(r_off,2),2);
 	    sw *= pow(r_off,2)+2*pow(r,2)-3*pow(r_on,2);
 	    sw /= pow(pow(r_off,2)-pow(r_on,2),3);	
-	} else if ( r <= r_on ) {
+	} else if ( r < r_on ) {
 	    sw = 1.0;
 	}
 	return sw;
     }
-	
+
+    double switch_function_angle(const double a, const double a_on, const double a_off)
+    {
+	double sw = 0.0;
+		
+	if ( a_off < a && a < a_on ) {
+	    sw = pow(pow(a,2)-pow(a_off,2),2);
+	    sw *= pow(a_off,2)+2*pow(a,2)-3*pow(a_on,2);
+	    sw /= pow(pow(a_off,2)-pow(a_on,2),3);
+	    sw *= -1.0;
+	} else if ( a > a_on ) {
+	    sw = 1.0;
+	}
+	return sw;
+    }
+
+    double computeEnergy(const double r,
+			 const double cosine,
+			 const double r_on,
+			 const double r_off,
+			 const double theta_on,
+			 const double theta_off)
+    {
+	static float C = 3855; /* epsilon*sigma^6*sqrt(2/3) */
+	static float D = 738; /* epsilon*sigma^4*sqrt(2/3) */
+	double radius_switch = switch_function_radius(r*r, r_on*r_on, r_off*r_off);
+	double angle_switch = switch_function_angle(cosine*cosine,
+						    theta_off, theta_on); 
+	double energy = ((C/pow(r, 6.0))-(D/pow(r, 4.0)));
+	energy *= pow(cosine, 4.0);
+	energy *= radius_switch;
+	energy *= angle_switch;
+	return energy;
+    }
+
     float getVolume(Alpha_shape_3 &s)
     {
-	float volume = 0;
+	float volume = 0.0;
 	
 	for(Alpha_shape_3::Finite_cells_iterator it = s.finite_cells_begin(); 
 	    it != s.finite_cells_end(); it++)
@@ -32,154 +65,55 @@ namespace cgal {
 	
 	return volume;
     }
-    
-    std::vector<int> searchPoints(Alpha_shape_3 &s, std::vector<Point_3> points)
+
+    std::vector<int> filterPoints (std::vector<Point_3>& points,
+    				   Alpha_shape_3& s,
+    				   int start,
+    				   int stop)
     {
-	std::vector<int> pointLocated;      
-    
-	for (unsigned int i = 0; i < points.size(); i++)
+    	std::vector<int> pointLocated;
+    	for ( int i = start; i < stop; i++)
+    	{
+    	    if (s.classify(points.at(i)) == Alpha_shape_3::INTERIOR)
+    	    {
+    		pointLocated.push_back(i);
+    	    }
+    	}
+    	return pointLocated;
+    }
+
+    int filterPointsParallel(std::vector<Point_3>& points,
+			     Alpha_shape_3& s,
+			     std::vector<int>& results)
+    {
+	/* Make chunks */
+	int n = std::thread::hardware_concurrency();
+	int chunk_size = points.size() / n;
+	/* Make Futures */
+	std::vector< std::future< std::vector< int> > > futures;
+	for ( int k = 0; k < n-1; k++ )
 	{
-	    if (s.classify(points.at(i)) == Alpha_shape_3::INTERIOR)
-	    {
-		pointLocated.push_back(i);
-	    }
+	    futures.push_back(std::async(std::launch::async,
+					 filterPoints, std::ref(points), std::ref(s),
+					 chunk_size*k, chunk_size*k+chunk_size));
 	}
-
-	return pointLocated;
-    }
-
-    std::vector<int> searchPoints(Kd_tree_3 &s, std::vector<Point_3> points)
-    {
 	
-	std::set<int> indiceLocated;
-	std::vector<cgal::Point_and_int> neighbors;
-	for (unsigned  int i = 0; i < points.size(); i++)
+	results = filterPoints(points, s, chunk_size*(n-1), points.size());
+	/* Gather results */
+	for ( auto &fut : futures )
 	{
-	    Fuzzy_sphere_3 fs(points.at(i), 0.4, 0.2);
-	    s.search(std::inserter(neighbors, neighbors.end ()), fs);
-	    for (auto it : neighbors)
-	    {
-		indiceLocated.insert(boost::get<1>(it));
-	    }
-	}
-	// std::cout << neighbors.size() << std::endl;
-	std::vector<int> pointLocated(indiceLocated.begin(), indiceLocated.end());
-	return pointLocated;
-    }
-    
-    double computeEnergy1(const double r, const double cosine)
-    {
-	static float C = 3855; /* epsilon*sigma^6*sqrt(2/3) */
-	static float D = 738; /* epsilon*sigma^4*sqrt(2/3) */
-	static float theta_on = 0.25;
-	static float theta_off = 0.0301;
-	static float r_on = 5.5;
-	static float r_off = 6.5;
-	double r_switch = switch_function(r, r_on, r_off);
-	double theta_switch = 1-switch_function(pow(cosine, 2), theta_off, theta_on); 
-	double energy = -((C/pow(r, 6.0))-(D/pow(r, 4.0)));
-	energy *= pow(cosine,4.0);
-	energy *= r_switch;
-	energy *= theta_switch;
-	return energy;
-    }
-
-    
-    double computeEnergy2(const double r, const double cosine,
-			  const double r_on = 5.5,
-			  const double r_off = 6.5,
-			  const double theta_on = 0.25,
-			  const double theta_off = 0.0301)
-    {
-	static float C = 3855; /* epsilon*sigma^6*sqrt(2/3) */
-	static float D = 738; /* epsilon*sigma^4*sqrt(2/3) */
-	// static float theta_on = 0.25;
-	// static float theta_off = 0.0301;
-	// static float r_on = 5.5;
-	// static float r_off = 6.5;
-	double r_switch = switch_function(r, r_on, r_off);
-	double theta_switch = 1-switch_function(pow(cosine, 2), theta_off, theta_on); 
-	double energy = -((C/pow(r, 6.0))-(D/pow(r, 4.0)));
-	energy *= pow(cosine,4.0);
-	energy *= r_switch;
-	energy *= theta_switch;
-	return energy;
-    }
-
-    
-    std::vector<edge> analyseEdges(DelaunayWithInfo &g)
-    {
-	std::vector<edge> edges;
-	CGAL::Vector_3<K> OO, OH11, OH12, OH21, OH22, OH1, OH2;
-	DelaunayWithInfo::Vertex_handle v1, v2;
-	for(DelaunayWithInfo::Finite_edges_iterator ei=g.finite_edges_begin();
-	    ei!=g.finite_edges_end(); ++ei) {
-	    v1 = ei->first->vertex(ei->second);
-	    v2 = ei->first->vertex(ei->third);
-
-	    edge e;
-
-	    std::vector<double> energies(4, 0.0);
-	    OO = v1->point() - v2->point();
-	    
-	    float distance = 10.0*CGAL::sqrt(OO*OO);
-
-	    OH11 = v1->info().h1 - v1->point();
-	    OH12 = v1->info().h2 - v1->point();
-	    OH21 = v2->info().h1 - v2->point();
-	    OH22 = v2->info().h2 - v2->point();
-	    
-	    OO = OO / CGAL::sqrt(OO*OO);
-	    OH11 = OH11 / CGAL::sqrt(OH11*OH11);
-	    OH12 = OH12 / CGAL::sqrt(OH12*OH12);
-	    OH21 = OH21 / CGAL::sqrt(OH21*OH21);
-	    OH22 = OH22 / CGAL::sqrt(OH22*OH22);
-
-	    std::vector<double> coss;
-	    coss.push_back(OH11 * OO);
-	    coss.push_back(OH12 * OO);
-	    coss.push_back(OH21 * -OO);
-	    coss.push_back(OH22 * -OO);
-	    
-	    for (unsigned int i = 0; i < coss.size(); i++) {
-		if (coss.at(i) > 0.0) {
-		    energies.at(i) = computeEnergy2(distance, coss.at(i));
-		}
-	    }
-	    
-	    auto result = std::max_element(energies.begin(), energies.end());
-
-	    int ind = std::distance(energies.begin(), result);
-	    e.energy = energies.at(ind);
-	    e.energy = 0.0;
-	    e.angle = coss.at(ind);
-	    e.length = distance;
-	    
-	    if ( ind < 2 ) {
-		e.i = v1->info().id;
-		e.j = v2->info().id;
-	    }
-	    else
-	    {
-		e.i = v2->info().id;
-		e.j = v1->info().id;
-	    }
-	    if ( e.length < 6.0 ) {
-		edges.push_back(e);
-	    }
+	    fut.wait();
 	}
 
-	return edges;
-    }
-    
-
-    
-    void testComputeEdgeEnergy()
-    {
-	add_x add42(42);
-	computeEnergy computeHB();
-	computeEdgeEnergy<computeEnergy, DelaunayWithInfo> computeEdge(computeHB);
+	for ( auto &fut : futures )
+	{
+	    std::vector<int> chunk = fut.get();
+	    results.insert(results.end(),
+			   std::make_move_iterator(chunk.begin()),
+			   std::make_move_iterator(chunk.end()));
+	}
 	
+	return results.size();
+
     }
 }
-

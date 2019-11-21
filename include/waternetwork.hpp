@@ -38,23 +38,25 @@
 
 #include <string>
 #include <vector>
+#include <fstream>
 
-//#include "AlphaShapeSearch.hpp"
-//#include "graph_module.hpp"
+#include "Cgal.hpp"
 
 #include <gromacs/trajectoryanalysis.h>
-#include "AnalysisInterface.hpp"
+
+
 
 /*! \brief
  * Template class to serve as a basis for user analysis tools.
  */
+struct Site;
 
 class WaterNetwork : public gmx::TrajectoryAnalysisModule
 {
 public:
     WaterNetwork();
 
-    virtual void initOptions(gmx::Options                    *options,
+    virtual void initOptions(gmx::IOptionsContainer          *options,
 			     gmx::TrajectoryAnalysisSettings *settings);
     virtual void initAnalysis(const gmx::TrajectoryAnalysisSettings &settings,
 			      const gmx::TopologyInformation        &top);
@@ -65,7 +67,7 @@ public:
     virtual void writeOutput();
 
 private:
-    class ModuleData;
+    // class ModuleData;
     
     std::string fnFilter_;
     std::string fnGraph_;
@@ -79,7 +81,7 @@ private:
     int nb_water_;
     
     gmx::Selection solvent_;
-    gmx::Selection calpha_;
+    gmx::Selection alpha_;
     gmx::Selection protein_;
     gmx::Selection source_;
     gmx::Selection sink_;
@@ -94,10 +96,12 @@ private:
     
     gmx::AnalysisDataAverageModulePointer avem_;
 
-    std::shared_ptr<AnalysisInterface> strategy_;
+    // std::shared_ptr<cgal::computeEdgeEnergy> computator_;
     
     std::vector<Site> solventSites_;
     std::vector<Site> proteinSites_;
+
+    std::ofstream outputStream_;
 };
 
 #endif

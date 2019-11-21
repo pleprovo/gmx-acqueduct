@@ -22,23 +22,22 @@ std::vector<T> fromGmxtoCgalPosition(const gmx::ConstArrayRef<rvec> &coordinates
 }
 
 
-AlphaShape::AlphaShape()
-    : gmx::TrajectoryAnalysisModule("AlphaShape", "Protein Surface analysis"),
-      lifetimeModule_(new gmx::AnalysisDataLifetimeModule())
+AlphaShape::AlphaShape() : lifetimeModule_(new gmx::AnalysisDataLifetimeModule())
 {
     alphaValue_ = 1.0;
     numFrameValue_ = 250;
     registerAnalysisDataset(&waterData_, "aveWater");
     registerAnalysisDataset(&volumeData_, "aveVolume");
-
+    
     lifetimeData_.addModule(lifetimeModule_);
+    
     registerAnalysisDataset(&lifetimeData_, "data");
     registerBasicDataset(lifetimeModule_.get(), "lifetime"); 
 }
 
 
-void AlphaShape::initOptions(gmx::Options                    *options,
-			gmx::TrajectoryAnalysisSettings *settings)
+void AlphaShape::initOptions(gmx::IOptionsContainer          *options,
+			     gmx::TrajectoryAnalysisSettings *settings)
 {
     static const char *const desc[] = {
         "This is a template for writing your own analysis tools for",
@@ -56,7 +55,7 @@ void AlphaShape::initOptions(gmx::Options                    *options,
         "analysis groups."
     };
 
-    options->setDescription(desc);
+    settings->setHelpText(desc);
 
     options->addOption(gmx::FileNameOption("o").filetype(gmx::eftPlot).outputFile()
 		       .store(&filenameWater_).defaultBasename("buried")
@@ -67,7 +66,8 @@ void AlphaShape::initOptions(gmx::Options                    *options,
     options->addOption(gmx::FileNameOption("ol").filetype(gmx::eftPlot).outputFile()
 	               .store(&filenameLifetime_).defaultBasename("life")
 		       .description("Lifetime of water molecules within the surface"));  
-    options->addOption(gmx::SelectionOption("Alpha Points").storeVector(&selectionListAlpha_)
+    options->addOption(gmx::SelectionOption("Alpha Points")
+		       .storeVector(&selectionListAlpha_)
 		       .required().multiValue()
 		       .description("Reference group to calculate alpha shape)"));
     options->addOption(gmx::SelectionOption("Waters").store(&selectionWater_)
@@ -78,11 +78,14 @@ void AlphaShape::initOptions(gmx::Options                    *options,
 		       .description("Alpha Value for the Alpha Shape computation"));
     options->addOption(gmx::DoubleOption("nf").store(&numFrameValue_)
 		       .description("Number fof frames to consider for lifetime"));
+
+    settings->setFlag(gmx::TrajectoryAnalysisSettings::efRequireTop);
+    
 }
 
 
 void AlphaShape::initAnalysis(const gmx::TrajectoryAnalysisSettings &settings,
-			 const gmx::TopologyInformation        &top)
+			      const gmx::TopologyInformation        &top)
 {
     /* Set the number of column to store time dependent data */
     waterData_.setColumnCount(0, selectionListAlpha_.size());
@@ -91,6 +94,7 @@ void AlphaShape::initAnalysis(const gmx::TrajectoryAnalysisSettings &settings,
     // alphaShapeModulePtr_->setAlpha(alphaValue_);
     std::cout << "Using Alpha Value : " << alphaValue_ << std::endl;
     std::cout << "Using persistance value : " << numFrameValue_ << std::endl;
+
     
     /* Init the Plot module for the time dependent data */
     if (!filenameWater_.empty())
@@ -122,28 +126,27 @@ void AlphaShape::initAnalysis(const gmx::TrajectoryAnalysisSettings &settings,
 	}
         volumeData_.addModule(plotm);
     }
-
+    
     lifetimeData_.setDataSetCount(selectionListAlpha_.size());
     for (size_t g = 0; g < selectionListAlpha_.size(); g++)
     {
-	lifetimeData_.setColumnCount(g, selectionWater_.posCount()/3);
+    	lifetimeData_.setColumnCount(g, selectionWater_.posCount()/3);
     }
     lifetimeModule_->setCumulative(true);
     if (!filenameLifetime_.empty())
     {
-	gmx::AnalysisDataPlotModulePointer plot(
-	    new gmx::AnalysisDataPlotModule(settings.plotSettings()));
-	plot->setFileName(filenameLifetime_);
-	plot->setTitle("Lifetime of water in the surface");
-	plot->setXAxisIsTime();
-	plot->setYLabel("Occupancy");
-	plot->setYFormat(1, 0);
+    	gmx::AnalysisDataPlotModulePointer plot(
+    	    new gmx::AnalysisDataPlotModule(settings.plotSettings()));
+    	plot->setFileName(filenameLifetime_);
+    	plot->setTitle("Lifetime of water in the surface");
+    	plot->setXAxisIsTime();
+    	plot->setYLabel("Occupancy");
 
-	for (size_t g = 0; g < selectionListAlpha_.size(); g++)
-	{
-	    plot->appendLegend(std::string(selectionListAlpha_.at(g).name()));
-	}
-	lifetimeData_.addModule(plot);
+    	for (size_t g = 0; g < selectionListAlpha_.size(); g++)
+    	{
+    	    plot->appendLegend(std::string(selectionListAlpha_.at(g).name()));
+    	}
+    	lifetimeModule_->addModule(plot);
 	
     }
 }
@@ -174,15 +177,16 @@ void AlphaShape::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
 
 	cgal::Alpha_shape_3 alphaShape(alphaPoints.begin(), alphaPoints.end());
 	alphaShape.set_alpha(1.0);
-	std::vector<int> selected = cgal::searchPoints(alphaShape, oxygens);
+	std::vector<int> selected;
+	int num_filtered  = cgal::filterPointsParallel(oxygens, alphaShape, selected);
 
-	waterDataHandle.setPoint(i, selected.size());
+	waterDataHandle.setPoint(i, num_filtered);
 	volumeDataHandle.setPoint(i, cgal::getVolume(alphaShape));
 
-	lifetimeDataHandle.selectDataSet(i);
-	for (size_t s = 0; s < oxygens.size(); s++)
+       	lifetimeDataHandle.selectDataSet(i);
+	for (unsigned int j = 0; j < oxygens.size(); ++j)
 	{
-	    lifetimeDataHandle.setPoint(s, 0);
+	    lifetimeDataHandle.setPoint(j, 0);
 	}
 	for (auto id : selected)
 	{

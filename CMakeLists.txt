@@ -35,7 +35,7 @@ list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 # to match.
 option(GMX_DOUBLE "Use double precision" OFF)
 set(GMX_SUFFIX "" CACHE STRING "Suffix for the GROMACS installation to use (empty for default)")
-set(GROMACS_DIR "~/programs/gromacs/5.1.2/share/cmake/gromacs")
+set(GROMACS_DIR "/usr/local/gromacs/2016.5")
 #set(GROMACS_DIR "/localdisk/local/share/cmake/gromacs")
 
 # This does not allow for a non-suffixed double-precision libgromacs, but
@@ -46,26 +46,20 @@ else()
     set(GROMACS_SUFFIX ${GMX_SUFFIX})
 endif()
 
-find_package(GROMACS 5.1 REQUIRED)
+find_package(GROMACS 2016.5 REQUIRED)
 gromacs_check_double(GMX_DOUBLE)
 gromacs_check_compiler(CXX)
 include_directories(${GROMACS_INCLUDE_DIRS})
 add_definitions(${GROMACS_DEFINITIONS})
 
-set (CMAKE_CXX_FLAGS "-Wall -O2 -pg -std=c++14 -lfftw3")
-
-# includes and sources
-add_library ( cgal SHARED src/Cgal.cpp )
-include_directories( cgal PUBLIC include )
-
-add_library ( bgl SHARED src/graph_module.cpp )
-include_directories( bgl PUBLIC include )
+set (CMAKE_CXX_FLAGS "-fopenmp -Wall -O2 -pg -pthread -std=c++17 -lfftw3")
 
 include_directories( include )
 
-set( SOURCE_WATERNETWORK src/waternetwork.cpp
-  src/AnalysisAlphaShape.cpp
-  src/AnalysisNeighbors.cpp )
+add_library ( cgal SHARED src/Cgal.cpp )
+include_directories( cgal PUBLIC include )
+
+set( SOURCE_WATERNETWORK src/waternetwork.cpp )
 
 set( SOURCE_ALPHASHAPE src/alphashape.cpp )
 
@@ -73,13 +67,13 @@ set( SOURCE_TESTS test/tests.cpp )
 
 
 add_executable ( waternetwork ${SOURCE_WATERNETWORK})
-target_link_libraries( waternetwork ${GROMACS_LIBRARIES} cgal bgl )
+target_link_libraries( waternetwork ${GROMACS_LIBRARIES} cgal )
 
 add_executable ( alphashape ${SOURCE_ALPHASHAPE})
 target_link_libraries( alphashape ${GROMACS_LIBRARIES} cgal )
 
 add_executable ( tests ${SOURCE_TESTS} )
-target_link_libraries( tests ${GROMACS_LIBRARIES} cgal bgl fftw3)
+target_link_libraries( tests ${GROMACS_LIBRARIES} cgal fftw3)
 
 enable_testing()
 add_test(NAME tests COMMAND tests)
