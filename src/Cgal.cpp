@@ -1,5 +1,7 @@
 
-#include "Cgal.hpp"
+#include "cgal.hpp"
+
+#include <future>
 
 namespace cgal {
     double switch_function_radius(const double r, const double r_on, const double r_off)
@@ -66,10 +68,10 @@ namespace cgal {
 	return volume;
     }
 
-    std::vector<int> filterPoints (std::vector<Point_3>& points,
+    std::vector<int> filterPoints (const std::vector<Point_3>& points,
     				   Alpha_shape_3& s,
-    				   int start,
-    				   int stop)
+    				   const int start,
+    				   const int stop)
     {
     	std::vector<int> pointLocated;
     	for ( int i = start; i < stop; i++)
@@ -82,7 +84,7 @@ namespace cgal {
     	return pointLocated;
     }
 
-    int filterPointsParallel(std::vector<Point_3>& points,
+    int filterPointsParallel(const std::vector<Point_3>& points,
 			     Alpha_shape_3& s,
 			     std::vector<int>& results)
     {
@@ -99,13 +101,14 @@ namespace cgal {
 	}
 	
 	results = filterPoints(points, s, chunk_size*(n-1), points.size());
+	
 	/* Gather results */
-	for ( auto &fut : futures )
+	for ( std::future< std::vector<int> >& fut : futures )
 	{
 	    fut.wait();
 	}
 
-	for ( auto &fut : futures )
+	for (  std::future< std::vector<int> >& fut : futures )
 	{
 	    std::vector<int> chunk = fut.get();
 	    results.insert(results.end(),

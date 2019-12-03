@@ -8,7 +8,7 @@
 
 // Convert position from Gmx to CGAL type
 template <class T>
-std::vector<T> fromGmxtoCgalPosition(const gmx::ConstArrayRef<rvec> &coordinates,
+std::vector<T> fromGmxtoCgalPosition(const gmx::ArrayRef<const rvec> &coordinates,
 				     const int increment=1)
 {
     std::vector<T> cgalPositionVector;   
@@ -78,11 +78,16 @@ void AlphaShape::initOptions(gmx::IOptionsContainer          *options,
 		       .description("Alpha Value for the Alpha Shape computation"));
     options->addOption(gmx::DoubleOption("nf").store(&numFrameValue_)
 		       .description("Number fof frames to consider for lifetime"));
-
-    settings->setFlag(gmx::TrajectoryAnalysisSettings::efRequireTop);
     
 }
 
+void AlphaShape::optionsFinished(gmx::TrajectoryAnalysisSettings *settings)
+{
+
+    settings->setFlag(gmx::TrajectoryAnalysisSettings::efRequireTop);
+    settings->setFlag(gmx::TrajectoryAnalysisSettings::efUseTopX);
+
+}
 
 void AlphaShape::initAnalysis(const gmx::TrajectoryAnalysisSettings &settings,
 			      const gmx::TopologyInformation        &top)
@@ -163,7 +168,7 @@ void AlphaShape::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
     const gmx::Selection &selectionWater = pdata->parallelSelection(selectionWater_);
 
     /* Get water Position and indices */
-    gmx::ConstArrayRef<rvec> waterCoordinates = selectionWater.coordinates();
+    const gmx::ArrayRef<const rvec>& waterCoordinates = selectionWater.coordinates();
 
     /* Convert gromacs rvec position to cgal Point class */
     std::vector<cgal::Point_3> oxygens = fromGmxtoCgalPosition<cgal::Point_3>(waterCoordinates, 3);
@@ -188,7 +193,7 @@ void AlphaShape::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
 	{
 	    lifetimeDataHandle.setPoint(j, 0);
 	}
-	for (auto id : selected)
+	for (int id : selected)
 	{
 	    lifetimeDataHandle.setPoint(id, 1);
 	}

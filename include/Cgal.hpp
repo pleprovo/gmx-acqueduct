@@ -2,6 +2,8 @@
 #include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
 #include <CGAL/Delaunay_triangulation_3.h>
 #include <CGAL/Alpha_shape_3.h>
+#include <CGAL/Alpha_shape_cell_base_3.h>
+#include <CGAL/Alpha_shape_vertex_base_3.h>
 #include <CGAL/Triangulation_hierarchy_3.h>
 #include <CGAL/Triangulation_vertex_base_with_info_3.h>
 #include <CGAL/Delaunay_triangulation_cell_base_3.h>
@@ -12,12 +14,9 @@
 #include <CGAL/Fuzzy_sphere.h>
 #include <CGAL/property_map.h>
 
-#include <boost/iterator/zip_iterator.hpp>
+// #include <boost/iterator/zip_iterator.hpp>
 
-#include <utility>
-#include <functional>
 #include <tuple>
-#include <future>
 
 #include "utils.hpp"
 
@@ -38,7 +37,9 @@ namespace cgal {
 	Site_ptr site;
 	std::vector<Point_ptr> hydrogens;
     };
-	
+
+    using NodeTuple = std::tuple<Point_ptr, Site_ptr, std::vector<Point_ptr> >;
+    
     typedef boost::tuple<Point_3, Info> Point_and_Info;
     
     typedef CGAL::Alpha_shape_vertex_base_3<K> Vb;
@@ -102,9 +103,9 @@ namespace cgal {
      * Find point in Alpha Shape 
      */
     std::vector<int> filterPoints (std::vector<Point_3>& points,
-    				   Alpha_shape_3& s,
-    				   int start,
-    				   int stop);
+				   Alpha_shape_3& s,
+				   int start,
+				   int stop);
 
     /* 
      * Asynchronous version of filterPoints 

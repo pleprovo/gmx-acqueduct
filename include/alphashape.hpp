@@ -54,15 +54,16 @@ public:
     AlphaShape();
 
     virtual void initOptions(gmx::IOptionsContainer          *options,
-			     gmx::TrajectoryAnalysisSettings *settings);
+			     gmx::TrajectoryAnalysisSettings *settings) override;
+    void optionsFinished(gmx::TrajectoryAnalysisSettings *settings) override;
     virtual void initAnalysis(const gmx::TrajectoryAnalysisSettings &settings,
-			      const gmx::TopologyInformation        &top);
+			      const gmx::TopologyInformation        &top) override;
 
     virtual void analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
-			      gmx::TrajectoryAnalysisModuleData *pdata);
+			      gmx::TrajectoryAnalysisModuleData *pdata) override;
 
-    virtual void finishAnalysis(int nframes);
-    virtual void writeOutput();
+    virtual void finishAnalysis(int nframes) override;
+    virtual void writeOutput() override;
 
 private:
     class ModuleData;
@@ -83,6 +84,8 @@ private:
 
     gmx::AnalysisData                lifetimeData_;
     gmx::AnalysisDataLifetimeModulePointer  lifetimeModule_;
+
+    const gmx::TopologyInformation  *top_;
 };
 
 #endif 

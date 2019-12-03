@@ -3,14 +3,15 @@
 
 #include "waternetwork.hpp"
 #include "gromacs/pbcutil/pbc.h"
+#include "gromacs/trajectoryanalysis/topologyinformation.h"
+
 #include <iostream>
 #include <fstream>
 #include <chrono>
-
-
+#include <future>
 
 template <typename T>
-std::vector<T> fromGmxtoCgalPosition(const gmx::ConstArrayRef<rvec>& coordinates,
+std::vector<T> fromGmxtoCgalPosition(const gmx::ArrayRef<const rvec>& coordinates,
 				     const int increment=1)
 {
     std::vector<T> cgalPositionVector;
@@ -36,7 +37,9 @@ std::ostream& operator << (std::ostream& os, const Site& site)
     return os;
 }
 
-int makeSites(gmx::Selection &selection, t_topology *top, std::vector<Site> &sites)
+int makeSites(gmx::Selection &selection,
+	      const gmx::TopologyInformation *top,
+	      std::vector<Site> &sites)
 {
     std::set<std::string> atomNames {
 	"NE", /* 1H */
@@ -83,14 +86,14 @@ int makeSites(gmx::Selection &selection, t_topology *top, std::vector<Site> &sit
 
     std::string watres("WAT");
     
-    gmx::ConstArrayRef<int> indices = selection.atomIndices();
+    gmx::ArrayRef<const int> indices = selection.atomIndices();
 
     unsigned int count = 0;
     for (unsigned int i = 0; i < indices.size(); i++)
     {
 	int index = indices.at(i);
 	
-    	std::string name(*top->atoms.atomname[index]);
+    	std::string name(*top->atoms()->atomname[index]);
 	if ( atomNames.find(name) != atomNames.end() )
 	{ 
 	    count++;	    
@@ -98,7 +101,7 @@ int makeSites(gmx::Selection &selection, t_topology *top, std::vector<Site> &sit
 	    while (true)
 	    {
 	    	if ( index + nhb + 1 > indices.size() ) { break; }
-		std::string probe(top->atoms.atom[index + nhb + 1].elem);
+		std::string probe(top->atoms()->atom[index + nhb + 1].elem);
 	    	if ( probe.find("H") == std::string::npos ) { break; }
 		++nhb;
 	    }
@@ -107,14 +110,14 @@ int makeSites(gmx::Selection &selection, t_topology *top, std::vector<Site> &sit
 	    site.id = count;
 	    site.name = name;
 	    site.atmIndex = index;
-	    site.resIndex = top->atoms.atom[index].resind;
+	    site.resIndex = top->atoms()->atom[index].resind;
 	    site.nbHydrogen = nhb;
 	    site.type = siteType[site.name];
-	    if (watres.compare(*top->atoms.resinfo[site.resIndex].name) == 0)
+	    if (watres.compare(*top->atoms()->resinfo[site.resIndex].name) == 0)
 	    {
 		site.type = WATER;
 	    }
-	    site.resName = std::string(*top->atoms.resinfo[site.resIndex].name);
+	    site.resName = std::string(*top->atoms()->resinfo[site.resIndex].name);
 	    sites.push_back(site);
 	}
     }
@@ -191,7 +194,7 @@ std::vector< HydrogenBond > make_edges (std::vector<cgal::Node>& nodes,
 		
 		if ( !nodes.at(i).hydrogens.empty() )
 		{
-		    for ( auto& hydrogen : nodes.at(i).hydrogens )
+		    for ( cgal::Point_ptr& hydrogen : nodes.at(i).hydrogens )
 		    {
 			cgal::Vector_3 DH = *hydrogen - *nodes.at(i).point;
 			DH /= CGAL::sqrt(DH*DH);
@@ -203,7 +206,7 @@ std::vector< HydrogenBond > make_edges (std::vector<cgal::Node>& nodes,
 		
 		if ( !nodes.at(j).hydrogens.empty() )
 		{
-		    for ( auto& hydrogen : nodes.at(j).hydrogens )
+		    for ( cgal::Point_ptr& hydrogen : nodes.at(j).hydrogens )
 		    {
 			cgal::Vector_3 DH = *hydrogen - *nodes.at(j).point;
 			DH /= CGAL::sqrt(DH*DH);
@@ -214,7 +217,7 @@ std::vector< HydrogenBond > make_edges (std::vector<cgal::Node>& nodes,
 		}
 		
 		// float cosmax = -0.1786;
-		float cosmax = 0.5;
+		float cosmax = 0.80;
 		int pos = -1;
 		for ( unsigned int i = 0; i < coss.size(); ++i )
 		{
@@ -263,20 +266,21 @@ int make_edges_parallel(std::vector< cgal::Node >& nodes,
     edges = make_edges(nodes, chunk_size*(n-1), nodes.size());
 
     /* Await results */
-    for ( auto &fut : futures )
+    for ( std::future< std::vector<int> >& fut : futures )
     {
     	fut.wait();
     }
 
     /* Get result */
-    for ( auto &fut : futures )
+    for ( std::future< std::vector<int>>& fut : futures )
     {
 	fut.wait();
-    	std::vector< HydrogenBond > chunk = fut.get();
+    	std::vector< HydrogenBond  >chunk = fut.get();
     	edges.insert(edges.end(),
     			std::make_move_iterator(chunk.begin()),
     			std::make_move_iterator(chunk.end()));
     }
+    
     return edges.size();
 }
 
@@ -285,7 +289,8 @@ WaterNetwork::WaterNetwork() : alphavalue_(0.65),
 			       lengthon_(5.5),
 			       lengthoff_(6.5),
 			       angleon_(0.25),
-			       angleoff_(0.0301)
+			       angleoff_(0.0301),
+			       top_(nullptr)
 {
     registerAnalysisDataset(&filterData_, "filter");
     registerAnalysisDataset(&graphData_, "graph");
@@ -341,21 +346,26 @@ void WaterNetwork::initOptions(gmx::IOptionsContainer          *options,
 		       .description("Angle cutoff for energy calculation (default cos(90))"));
     options->addOption(gmx::DoubleOption("aoff").store(&angleoff_)
 		       .description("Angle cutoff for energy calculation (default cos(90))")); 
-    
+
+}
+
+void WaterNetwork::optionsFinished(gmx::TrajectoryAnalysisSettings *settings)
+{
+
     settings->setFlag(gmx::TrajectoryAnalysisSettings::efRequireTop);
     settings->setFlag(gmx::TrajectoryAnalysisSettings::efUseTopX);
 
 }
 
-
 void WaterNetwork::initAnalysis(const gmx::TrajectoryAnalysisSettings &settings,
 				const gmx::TopologyInformation        &top)
 {
+    top_ = &top;
     /* Make Protein Sites */
-    protein_.initOriginalIdsToGroup(top.topology(), INDEX_RES);
+    // protein_.initOriginalIdsToGroup(top_, INDEX_RES);
     if (protein_.isValid())
     {
-	if (makeSites(protein_, top.topology(), proteinSites_) > 0)
+	if (makeSites(protein_, top_, proteinSites_) > 0)
 	{
 	    std::clog << "Protein has : " << proteinSites_.size()
 		      << " Sites of out " << protein_.posCount() << " atoms."
@@ -366,12 +376,12 @@ void WaterNetwork::initAnalysis(const gmx::TrajectoryAnalysisSettings &settings,
     /* Make Solvent Sites */
     if (solvent_.isValid())
     {
-    	if (makeSites(solvent_, top.topology(), solventSites_) > 0)
+    	if (makeSites(solvent_, top_, solventSites_) > 0)
     	{
     	    std::clog << "Solvent has : " << solventSites_.size()
 		      << " Sites of out " << solvent_.posCount() << " atoms."
 		      << std::endl;
-	    for (auto &site : solventSites_ )
+	    for ( Site& site : solventSites_ )
 	    {
 		site.id += proteinSites_.size()+1;
 	    }
@@ -389,11 +399,11 @@ void WaterNetwork::initAnalysis(const gmx::TrajectoryAnalysisSettings &settings,
 		  << std::setw(7) << "Type" 
 		  << std::setw(7) << "Hyd\n";
     outputStream_.flush();
-    for ( auto &site : proteinSites_ )
+    for ( Site& site : proteinSites_ )
     {
 	outputStream_ << site;
     }
-    for ( auto &site : solventSites_ )
+    for ( Site& site : solventSites_ )
     {
 	outputStream_ << site;
     }

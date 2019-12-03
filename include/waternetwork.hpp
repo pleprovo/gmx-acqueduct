@@ -40,7 +40,7 @@
 #include <vector>
 #include <fstream>
 
-#include "Cgal.hpp"
+#include "cgal.hpp"
 
 #include <gromacs/trajectoryanalysis.h>
 
@@ -57,51 +57,46 @@ public:
     WaterNetwork();
 
     virtual void initOptions(gmx::IOptionsContainer          *options,
-			     gmx::TrajectoryAnalysisSettings *settings);
+			     gmx::TrajectoryAnalysisSettings *settings) override;
+    void optionsFinished(gmx::TrajectoryAnalysisSettings *settings) override;
     virtual void initAnalysis(const gmx::TrajectoryAnalysisSettings &settings,
-			      const gmx::TopologyInformation        &top);
+			      const gmx::TopologyInformation        &top) override;
 
     virtual void analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
-			      gmx::TrajectoryAnalysisModuleData *pdata);
-    virtual void finishAnalysis(int nframes);
-    virtual void writeOutput();
+			      gmx::TrajectoryAnalysisModuleData *pdata) override;
+    virtual void finishAnalysis(int nframes) override;
+    virtual void writeOutput() override;
 
 private:
-    // class ModuleData;
+    class ModuleData;
     
     std::string fnFilter_;
     std::string fnGraph_;
     
-    double alphavalue_;
-    double lengthon_;
-    double lengthoff_;
-    double angleon_;
-    double angleoff_;
+    double alphaValue_;
     
-    int nb_water_;
+    double lengthOn_;
+    double lengthOff_;
     
-    gmx::Selection solvent_;
-    gmx::Selection alpha_;
-    gmx::Selection protein_;
-    gmx::Selection source_;
-    gmx::Selection sink_;
-
-    std::vector<int> oxygenIndices_;
-
-    gmx::AnalysisNeighborhood nb1_;
-    gmx::AnalysisNeighborhood nb2_;
+    double angleOn_;
+    double angleOff_;
+    
+    gmx::Selection solventSel_;
+    gmx::Selection alphaSel_;
+    gmx::Selection proteinSel_;
     
     gmx::AnalysisData filterData_; 
     gmx::AnalysisData graphData_;
-    
-    gmx::AnalysisDataAverageModulePointer avem_;
 
-    // std::shared_ptr<cgal::computeEdgeEnergy> computator_;
+    std::unique_ptr<FindHydrogenBonds> computator_;
     
-    std::vector<Site> solventSites_;
-    std::vector<Site> proteinSites_;
+    std::vector<const Site> solventSites_;
+    std::vector<const Site> proteinSites_;
 
     std::ofstream outputStream_;
+    
+    //! Topology
+    const gmx::TopologyInformation *top_;
 };
 
 #endif
