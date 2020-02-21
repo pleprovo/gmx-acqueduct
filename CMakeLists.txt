@@ -4,7 +4,7 @@ project ( waternetwork )
 cmake_minimum_required( VERSION 2.8.11 )
 
 # CGAL and its components
-set( CGAL_DIR /localdisk/env/CGAL-5.0)
+set( CGAL_DIR ~/CGAL-5.0)
 find_package( CGAL QUIET COMPONENTS )
 
 if ( NOT CGAL_FOUND )
@@ -60,14 +60,14 @@ add_definitions(${GROMACS_DEFINITIONS})
 set (CMAKE_CXX_FLAGS "-Wall -O2 -pg -pthread -std=c++17 -lfftw3 -fext-numeric-literals")
 
 add_library( hbn SHARED
-  src/cgal.cpp
   src/calculate-hydrogen-bond-energy.cpp
-  src/brute-find-hydrogen-bonds.cpp
-  src/delaunay-find-hydrogen-bonds.cpp
-  src/alpha-shape-water-locator.cpp)
+  src/brute-find-pairs.cpp
+  src/delaunay-find-pairs.cpp
+  src/alpha-shape-surface.cpp)
+
 include_directories( hbn PUBLIC include )
 
-include_directories( include )
+# include_directories( include )
 
 set( SOURCE_WATERNETWORK src/waternetwork.cpp )
 

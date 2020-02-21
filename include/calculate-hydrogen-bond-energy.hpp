@@ -1,16 +1,26 @@
 #ifndef CALCULATEHYDROGENBONDENERGY_HPP
 #define CALCULATEHYDROGENBONDENERGY_HPP
 
-#include "find-hydrogen-bonds.hpp"
+#include "utils.hpp"
 
-class CaculateHydrogenBondEnergy
+class CalculateHydrogenBondEnergy
 {
 public:
-    float calculate(const HydrogenBond& hb);
-private:
+    void setRadiusShift(float r_on, float r_off);
+    void setAngleShift(float a_on, float a_off);
+    // std::vector<HydrogenBond> calculate(const std::vector<std::pair<int, int>>& pairs,
+    // 					const std::vector<Point>& sitePoints,
+    // 					const std::vector<std::vector<Point_ptr>>& hydrogen,
+    // 					const std::vector<SiteInfo_ptr>& sites);
     
-    distanceCuton_;
-    distanceCutoff_;
-    angleCuton_;
-    angleCutoff_;
-}
+private:
+    float switch_radius(const float r);
+    float switch_angle(const float a);
+    
+    float r_on_;
+    float r_off_;
+    float a_on_;
+    float a_off_;
+};
+
+#endif

@@ -1,8 +1,12 @@
 
 
+#include <string>
+#include <utility>
+#include <memory>
+
 enum SiteType {DONOR, ACCEPTOR, WATER};
 
-struct Site
+struct SiteInfo
 {
     SiteType type;
     std::string name;
@@ -13,14 +17,14 @@ struct Site
     short unsigned int nbHydrogen;
 };
 
-using Site_ptr = std::shared_ptr<Site>;
-using SitePair = std::pair<Site_ptr, Site_ptr>;
+using SiteInfo_ptr = std::shared_ptr<SiteInfo>;
+using SiteInfoPair = std::pair<SiteInfo_ptr, SiteInfo_ptr>;
 
 enum Direction {FORWARD, BACKWARD};
 
 struct HydrogenBond
 {
-    SitePair sites;
+    SiteInfoPair sites;
     Direction direction;
     double length;
     double angle;

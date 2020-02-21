@@ -40,16 +40,17 @@
 #include <vector>
 #include <fstream>
 
-#include "cgal.hpp"
+// #include "cgal.hpp"
+#include "alpha-shape-surface.hpp"
+#include "brute-find-pairs.hpp"
+#include "delaunay-find-pairs.hpp"
+#include "calculate-hydrogen-bond-energy.hpp"
 
 #include <gromacs/trajectoryanalysis.h>
-
-
 
 /*! \brief
  * Template class to serve as a basis for user analysis tools.
  */
-struct Site;
 
 class WaterNetwork : public gmx::TrajectoryAnalysisModule
 {
@@ -88,10 +89,11 @@ private:
     gmx::AnalysisData filterData_; 
     gmx::AnalysisData graphData_;
 
-    std::unique_ptr<FindHydrogenBonds> computator_;
+    std::shared_ptr<DelaunayFindPairs> mp_;
+    std::shared_ptr<AlphaShapeSurface> as_;
     
-    std::vector<const Site> solventSites_;
-    std::vector<const Site> proteinSites_;
+    std::vector<SiteInfo> solventSites_;
+    std::vector<SiteInfo> proteinSites_;
 
     std::ofstream outputStream_;
     

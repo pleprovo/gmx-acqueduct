@@ -1,5 +1,5 @@
   
-#include "Cgal.hpp"
+// #include "cgal.hpp"
 #include "alphashape.hpp"
 
 #include <iostream>
@@ -25,6 +25,7 @@ std::vector<T> fromGmxtoCgalPosition(const gmx::ArrayRef<const rvec> &coordinate
 AlphaShape::AlphaShape() : lifetimeModule_(new gmx::AnalysisDataLifetimeModule())
 {
     alphaValue_ = 1.0;
+	
     numFrameValue_ = 250;
     registerAnalysisDataset(&waterData_, "aveWater");
     registerAnalysisDataset(&volumeData_, "aveVolume");
@@ -92,7 +93,10 @@ void AlphaShape::optionsFinished(gmx::TrajectoryAnalysisSettings *settings)
 void AlphaShape::initAnalysis(const gmx::TrajectoryAnalysisSettings &settings,
 			      const gmx::TopologyInformation        &top)
 {
-    /* Set the number of column to store time dependent data */
+    as_ = std::make_shared<AlphaShapeSurface>();
+    as_->setAlphaValue(alphaValue_);
+
+/* Set the number of column to store time dependent data */
     waterData_.setColumnCount(0, selectionListAlpha_.size());
     volumeData_.setColumnCount(0, selectionListAlpha_.size());
 
@@ -171,32 +175,32 @@ void AlphaShape::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
     const gmx::ArrayRef<const rvec>& waterCoordinates = selectionWater.coordinates();
 
     /* Convert gromacs rvec position to cgal Point class */
-    std::vector<cgal::Point_3> oxygens = fromGmxtoCgalPosition<cgal::Point_3>(waterCoordinates, 3);
+    std::vector<Point> oxygens = fromGmxtoCgalPosition<Point>(waterCoordinates, 3);
     
     waterDataHandle.startFrame(frnr, fr.time);
     volumeDataHandle.startFrame(frnr, fr.time);
     lifetimeDataHandle.startFrame(frnr, fr.time);
     for (unsigned int i = 0; i < selectionListAlpha.size(); i++)
     {	
-	std::vector<cgal::Point_3> alphaPoints = fromGmxtoCgalPosition<cgal::Point_3>(selectionListAlpha.at(i).coordinates());	
+    	std::vector<Point> alphaPoints = fromGmxtoCgalPosition<Point>(selectionListAlpha.at(i).coordinates());	
 
-	cgal::Alpha_shape_3 alphaShape(alphaPoints.begin(), alphaPoints.end());
-	alphaShape.set_alpha(1.0);
-	std::vector<int> selected;
-	int num_filtered  = cgal::filterPointsParallel(oxygens, alphaShape, selected);
+    	std::vector<int> selected;
+	as_->make(alphaPoints);
+	int num_filtered = as_->locate(oxygens, selected);
 
-	waterDataHandle.setPoint(i, num_filtered);
-	volumeDataHandle.setPoint(i, cgal::getVolume(alphaShape));
+    	waterDataHandle.setPoint(i, num_filtered);
+	
+	volumeDataHandle.setPoint(i, as_->volume());
 
        	lifetimeDataHandle.selectDataSet(i);
-	for (unsigned int j = 0; j < oxygens.size(); ++j)
-	{
-	    lifetimeDataHandle.setPoint(j, 0);
-	}
-	for (int id : selected)
-	{
-	    lifetimeDataHandle.setPoint(id, 1);
-	}
+    	for (unsigned int j = 0; j < oxygens.size(); ++j)
+    	{
+    	    lifetimeDataHandle.setPoint(j, 0);
+    	}
+    	for (int id : selected)
+    	{
+    	    lifetimeDataHandle.setPoint(id, 1);
+    	}
 	
     }
     lifetimeDataHandle.finishFrame();

@@ -40,8 +40,11 @@
 #include <string>
 #include <vector>
 
+#include "alpha-shape-surface.hpp"
+
 #include <gromacs/analysisdata/modules/lifetime.h> 
 #include <gromacs/trajectoryanalysis.h>
+
 
 
 /*! \brief
@@ -82,6 +85,8 @@ private:
     gmx::AnalysisData                waterData_;
     gmx::AnalysisData                volumeData_;
 
+    std::shared_ptr<AlphaShapeSurface> as_;
+    
     gmx::AnalysisData                lifetimeData_;
     gmx::AnalysisDataLifetimeModulePointer  lifetimeModule_;
 
