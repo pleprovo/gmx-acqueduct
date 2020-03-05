@@ -486,7 +486,7 @@ void WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
     const gmx::Selection &solventsel = pdata->parallelSelection(solventSel_);
     const gmx::Selection &alphasel = pdata->parallelSelection(alphaSel_);
 
-    // auto start = std::chrono::high_resolution_clock::now();
+    auto start = std::chrono::high_resolution_clock::now();
     
     /* Convert positions from gromacs rvec to cgal point *///////////////////////////
     std::vector<Point> alphaPoints
@@ -498,13 +498,17 @@ void WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
     std::vector<Point> oxygenPoints
 	= fromGmxtoCgalPosition<Point>(solventsel.coordinates(), 3);
     
-    // auto stop0 = std::chrono::high_resolution_clock::now(); 
+    auto stop0 = std::chrono::high_resolution_clock::now(); 
     
     /* Filter Solvent Sites *////////////////////////////////////////////////////////
     std::vector<int> filteredPoints;
     as_->make(alphaPoints);
+    
+    auto stop1 = std::chrono::high_resolution_clock::now();
+    
     int num_filtered = as_->locate(oxygenPoints, filteredPoints);
-    // auto stop1 = std::chrono::high_resolution_clock::now();
+    
+    auto stop2 = std::chrono::high_resolution_clock::now();
     
     /* Make Nodes *////////////////////////////////////////////////////////////////
     std::vector<Point> sitePoints;
@@ -548,20 +552,66 @@ void WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
     
     int num_sites = sitePoints.size();
 
-    // auto stop2 = std::chrono::high_resolution_clock::now();
+    auto stop3 = std::chrono::high_resolution_clock::now();
     
     // /* Find Edges *///////////////////////////////////////////////////////////////////
 
     std::vector<std::pair<int, int>> pairs = mp_->find(sitePoints);
     
-    // auto stop3 = std::chrono::high_resolution_clock::now();
+    auto stop4 = std::chrono::high_resolution_clock::now();
 
     // /* Find Hydrogen Bonds *//////////////////////////////////////////////////////////
     //TODO Make this function async
-    std::vector<HydrogenBond> edges = make_edges(pairs.begin(), pairs.end(), sitePoints,
-						 hydrogenPoints, siteInfos);
+
+    /* Make chunks */
+    int n = std::thread::hardware_concurrency();
+    int chunksize = pairs.size() / n;
+    // std::cout << " Concurrency " << n << " chunksize " << chunksize << std::endl;
+    /* Make Futures */
+    std::vector<std::future<std::vector<HydrogenBond>>> futures;
+
+    /* Launch Futures */
+    for ( int k = 0; k < n-1; k++ )
+    {
+    	futures.push_back(std::async(std::launch::async,
+    				     std::ref(make_edges),
+    				     pairs.begin()+chunksize*k,
+    				     pairs.begin()+chunksize*(k+1),
+    				     std::ref(sitePoints),
+    				     std::ref(hydrogenPoints),
+    				     std::ref(siteInfos)));
+    }
+    
+    futures.push_back(std::async(std::launch::async,
+				 std::ref(make_edges),
+				 pairs.begin()+chunksize*(n-1),
+				 pairs.end(),
+				 std::ref(sitePoints),
+				 std::ref(hydrogenPoints),
+				 std::ref(siteInfos)));
+
+    /* Get result */
+    std::vector<std::vector<HydrogenBond>> results;
+    for ( auto &fut : futures )
+    {
+	results.push_back(fut.get());
+    	// std::vector<HydrogenBond> chunk = fut.get();
+    }
+    
+    std::vector<HydrogenBond> edges;
+    for ( auto &chunk : results )
+    {
+    	edges.insert(edges.end(),
+    		     std::make_move_iterator(chunk.begin()),
+    		     std::make_move_iterator(chunk.end()));
+    }
+    
+    // std::vector<HydrogenBond> edges = make_edges(pairs.begin(), pairs.end(), sitePoints,
+    // 						 hydrogenPoints, siteInfos);
+    
     int num_edges = edges.size();
-    // auto stop4 = std::chrono::high_resolution_clock::now();
+
+    auto stop5= std::chrono::high_resolution_clock::now();
 
     // /* Write Graph *///////////////////////////////////////////////////////////////////
     
@@ -578,15 +628,13 @@ void WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
     }
     outputStream_.flush();
 
-    // auto stop5= std::chrono::high_resolution_clock::now();
-
-    // auto total = std::chrono::duration_cast<std::chrono::milliseconds>(stop4 - start); 
-    // auto convert = std::chrono::duration_cast<std::chrono::milliseconds>(stop0 - start);
-    // auto filter = std::chrono::duration_cast<std::chrono::milliseconds>(stop1 - stop0);
-    // auto fill = std::chrono::duration_cast<std::chrono::milliseconds>(stop2 - stop1); 
-    // auto connect = std::chrono::duration_cast<std::chrono::milliseconds>(stop3 - stop2);
-    // auto energy = std::chrono::duration_cast<std::chrono::milliseconds>(stop4 - stop3);
-    // auto write = std::chrono::duration_cast<std::chrono::milliseconds>(stop5 - stop4);
+    auto total = std::chrono::duration_cast<std::chrono::milliseconds>(stop4 - start); 
+    auto convert = std::chrono::duration_cast<std::chrono::milliseconds>(stop0 - start);
+    auto alpha = std::chrono::duration_cast<std::chrono::milliseconds>(stop1 - stop0);
+    auto locate = std::chrono::duration_cast<std::chrono::milliseconds>(stop2 - stop1); 
+    auto connect = std::chrono::duration_cast<std::chrono::milliseconds>(stop3 - stop2);
+    auto energy = std::chrono::duration_cast<std::chrono::milliseconds>(stop4 - stop3);
+    auto write = std::chrono::duration_cast<std::chrono::milliseconds>(stop5 - stop4);
     
     filterData.startFrame(frnr, fr.time);
     filterData.setPoint(0, num_filtered);
@@ -594,12 +642,12 @@ void WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
     filterData.finishFrame();
     
     graphData.startFrame(frnr, fr.time);
-    graphData.setPoint(0, num_sites);  
-    graphData.setPoint(1, num_edges);
-    graphData.setPoint(2, 1.0*num_edges/num_sites);
-    graphData.setPoint(3, 0.0);
-    graphData.setPoint(4, 0.0);
-    graphData.setPoint(5, 0.0);
+    graphData.setPoint(0, 1.0*convert.count()/total.count()/*num_sites*/);  
+    graphData.setPoint(1, 1.0*alpha.count()/total.count()/*num_edges*/);
+    graphData.setPoint(2, 1.0*locate.count()/total.count()/*1.0*num_edges/num_sites*/);
+    graphData.setPoint(3, 1.0*connect.count()/total.count()/*0.0*/);
+    graphData.setPoint(4, 1.0*energy.count()/total.count()/*0.0*/);
+    graphData.setPoint(5, 1.0*write.count()/total.count()/*0.0*/);
     graphData.finishFrame();
 
     // std::cout << "Num_nodes = " << num_nodes << " Num_edges = " << num_edges << std::endl;

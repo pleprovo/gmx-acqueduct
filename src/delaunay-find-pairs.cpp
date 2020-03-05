@@ -12,24 +12,21 @@ std::vector<std::pair<int, int>> DelaunayFindPairs::find(std::vector<Point>& poi
 	      std::back_inserter(indices));
     
     CGAL::spatial_sort( indices.begin(),
-			indices.end(),
-			Search_traits_3(CGAL::make_property_map(points)) );
+    			indices.end(),
+    			Search_traits_3(CGAL::make_property_map(points)) );
     DelaunayWithInfo di(boost::make_zip_iterator(boost::make_tuple(
 						     points.begin(), indices.begin() )),
 			boost::make_zip_iterator(boost::make_tuple(
 						     points.end(), indices.end())));
     CGAL_assertion( di.number_of_vertices() == points.size() );
-    
+
     std::vector<std::pair<int, int>> pairs;
     for (DelaunayWithInfo::Finite_edges_iterator eit = di.finite_edges_begin();
 	 eit != di.finite_edges_end(); ++eit)
     {
-	// DelaunayWithInfo::Edge e = *eit;
 	pairs.push_back(std::make_pair<int, int>(
 			    eit->first->vertex(eit->second)->info(),
 			    eit->first->vertex(eit->third)->info()));
-	// std::cout << pairs.back().first << " " << pairs.back().second << std::endl; 
     }
-    
     return pairs;
 }

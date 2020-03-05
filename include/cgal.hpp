@@ -13,6 +13,12 @@
 
 #include <tuple>
 
+// #ifdef CGAL_LINKED_WITH_TBB
+// typedef CGAL::Parallel_tag Concurrency_tag;
+// #else
+// typedef CGAL::Sequential_tag Concurrency_tag;
+// #endif
+
 // #include "utils.hpp"
 
 typedef CGAL::Exact_predicates_inexact_constructions_kernel K;
@@ -32,16 +38,15 @@ typedef CGAL::Delaunay_triangulation_3<K,
 typedef CGAL::Alpha_shape_3<Delaunay> Alpha_shape_3;
 
 // Definition for Delaunay with info
-
 typedef CGAL::Triangulation_vertex_base_with_info_3<unsigned, K> Vb;
 typedef CGAL::Delaunay_triangulation_cell_base_3<K> Cb;
 typedef CGAL::Triangulation_data_structure_3<Vb, Cb, CGAL::Parallel_tag> Tds;
 typedef CGAL::Delaunay_triangulation_3<K,
 				       Tds,
-				       CGAL::Fast_location> DelaunayWithInfo;
+				       CGAL::Parallel_tag> DelaunayWithInfo;
 
 // Adapt spatial sort for delaunay with info
 typedef CGAL::Spatial_sort_traits_adapter_3<K,
-          CGAL::Pointer_property_map<Point>::type > Search_traits_3;
+					    CGAL::Pointer_property_map<Point>::type > Search_traits_3;
 
 

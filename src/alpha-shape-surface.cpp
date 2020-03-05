@@ -31,71 +31,58 @@ float AlphaShapeSurface::volume()
     return volume;
 }
 
-std::vector<int> locate_async(int start,
-			      int stop,
-			      const std::vector<Point>& positions,
-			      const std::unique_ptr<Alpha_shape_3>& dt)
+int AlphaShapeSurface::locate(const std::vector<Point>& positions,
+			      std::vector<int>& locatedPositions)
 {
-    std::vector<int> locatedPositions;
-    for ( int i = start; i < stop; i++ )
+    for ( int i = 0; i < positions.size(); i++ )
     {
-        if (dt->classify(positions.at(i)) == Alpha_shape_3::INTERIOR)
+        if (dt_->classify(positions.at(i)) == Alpha_shape_3::INTERIOR)
     	{
     	    locatedPositions.push_back(i);
     	}
     }
-    return locatedPositions;
-}
-
-int AlphaShapeSurface::locate(const std::vector<Point>& positions,
-			      std::vector<int>& locatedPositions)
-{
     
-    /* Make chunks */
-    int n = std::thread::hardware_concurrency();
-    int chunk_size = positions.size() / n;
+    // /* Make chunks */
+    // int n = std::thread::hardware_concurrency();
+    // int chunk_size = positions.size() / n;
 
-    /* Make Futures */
-    std::vector<std::future<std::vector<int>>> futures;
+    // /* Make Futures */
+    // std::vector<std::future<std::vector<int>>> futures;
 
-    /* Launch Futures */
-    for ( int k = 0; k < n-1; k++ )
-    {
-    	futures.push_back(std::async(std::launch::async,
-    				     locate_async,
-    				     k*chunk_size,
-				     (k+1)*chunk_size,
-				     std::cref(positions),
-				     std::cref(dt_)));
-    }
-    
-    locatedPositions = locate_async(chunk_size*(n-1),
-				    positions.size(), positions, dt_);
-
-    /* Await results */
-    for ( std::future<std::vector<int>>& fut : futures )
-    {
-    	fut.wait();
-    }
-
-    /* Get result */
-    for ( std::future<std::vector<int>>& fut : futures )
-    {
-	fut.wait();
-    	std::vector<int>chunk = fut.get();
-    	locatedPositions.insert(locatedPositions.end(),
-				std::make_move_iterator(chunk.begin()),
-				std::make_move_iterator(chunk.end()));
-    }
-    
-    
-    // for ( int i = 0; i < positions.size(); i++)
+    // /* Launch Futures */
+    // for ( int k = 0; k < n-1; k++ )
     // {
-    // 	if (dt_->classify(positions.at(i)) == Alpha_shape_3::INTERIOR)
-    // 	{
-    // 	    locatedPositions.push_back(i);
-    // 	}
+    // 	futures.push_back(std::async(std::launch::async,
+    // 				     locate_async,
+    // 				     k*chunk_size,
+    // 				     (k+1)*chunk_size,
+    // 				     std::cref(positions),
+    // 				     std::cref(dt_)));
     // }
+    // futures.push_back(std::async(std::launch::async,
+    // 				 locate_async,
+    // 				 (n-1)*chunk_size,
+    // 				 positions.size(),
+    // 				 std::cref(positions),
+    // 				 std::cref(dt_)));
+
+    // /* Get result */
+    // std::vector<std::vector<int>> results;
+    // for ( auto &fut : futures )
+    // {
+    // 	results.push_back(fut.get());
+    // 	// std::vector<HydrogenBond> chunk = fut.get();
+    // }
+
+    
+    // /* Get result */
+    // for ( auto& chunk : results )
+    // {
+    // 	locatedPositions.insert(locatedPositions.end(),
+    // 				std::make_move_iterator(chunk.begin()),
+    // 				std::make_move_iterator(chunk.end()));
+    // }
+    
     return locatedPositions.size();
 }
 

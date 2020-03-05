@@ -7,6 +7,7 @@ cmake_minimum_required( VERSION 2.8.11 )
 set( CGAL_DIR ~/CGAL-5.0)
 find_package( CGAL QUIET COMPONENTS )
 
+
 if ( NOT CGAL_FOUND )
 
   message( STATUS "This project requires the CGAL library, and will not be compiled." )
@@ -51,6 +52,8 @@ else()
     set(GROMACS_SUFFIX ${GMX_SUFFIX})
 endif()
 
+
+
 find_package(GROMACS 2019.4 REQUIRED)
 gromacs_check_double(GMX_DOUBLE)
 gromacs_check_compiler(CXX)
@@ -83,7 +86,7 @@ add_executable( waternetwork ${SOURCE_WATERNETWORK} )
 add_to_cached_list( CGAL_EXECUTABLE_TARGETS waternetwork )
 
 # Link the executable to CGAL and third-party libraries
-target_link_libraries(waternetwork ${GROMACS_LIBRARIES} CGAL::CGAL hbn)
+target_link_libraries(waternetwork ${GROMACS_LIBRARIES} CGAL::CGAL hbn )
 
 
 # Creating entries for target: alphashape
@@ -93,7 +96,7 @@ add_executable( alphashape ${SOURCE_ALPHASHAPE} )
 add_to_cached_list( CGAL_EXECUTABLE_TARGETS alphashape )
 
 # Link the executable to CGAL and third-party libraries
-target_link_libraries(alphashape ${GROMACS_LIBRARIES} CGAL::CGAL hbn)
+target_link_libraries(alphashape ${GROMACS_LIBRARIES} CGAL::CGAL hbn )
 
 
 # Creating entries for target: tests
