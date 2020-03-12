@@ -34,7 +34,7 @@ float AlphaShapeSurface::volume()
 int AlphaShapeSurface::locate(const std::vector<Point>& positions,
 			      std::vector<int>& locatedPositions)
 {
-    for ( int i = 0; i < positions.size(); i++ )
+    for ( unsigned int i = 0; i < positions.size(); i++ )
     {
         if (dt_->classify(positions.at(i)) == Alpha_shape_3::INTERIOR)
     	{

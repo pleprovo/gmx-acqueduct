@@ -487,7 +487,7 @@ void WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
     const gmx::Selection &alphasel = pdata->parallelSelection(alphaSel_);
 
     auto start = std::chrono::high_resolution_clock::now();
-    
+    // std::clog << " >> ";
     /* Convert positions from gromacs rvec to cgal point *///////////////////////////
     std::vector<Point> alphaPoints
 	= fromGmxtoCgalPosition<Point>(alphasel.coordinates());
@@ -499,17 +499,17 @@ void WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
 	= fromGmxtoCgalPosition<Point>(solventsel.coordinates(), 3);
     
     auto stop0 = std::chrono::high_resolution_clock::now(); 
-    
+    // std::clog << " 1 >> ";
     /* Filter Solvent Sites *////////////////////////////////////////////////////////
     std::vector<int> filteredPoints;
     as_->make(alphaPoints);
     
     auto stop1 = std::chrono::high_resolution_clock::now();
-    
+    // std::clog << " 2 >> ";
     int num_filtered = as_->locate(oxygenPoints, filteredPoints);
     
     auto stop2 = std::chrono::high_resolution_clock::now();
-    
+    // std::clog << " 3 >> ";
     /* Make Nodes *////////////////////////////////////////////////////////////////
     std::vector<Point> sitePoints;
     std::vector<std::vector<Point_ptr>> hydrogenPoints;
@@ -519,7 +519,7 @@ void WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
     hydrogenPoints.reserve(proteinSites_.size() + filteredPoints.size());
     siteInfos.reserve(proteinSites_.size() + filteredPoints.size());
     
-    
+    // std::clog << " 3.0 >> ";
     for (SiteInfo& info : proteinSites_)
     {
     	std::vector<Point_ptr> hydrogens(info.nbHydrogen);
@@ -534,7 +534,7 @@ void WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
 	siteInfos.push_back(std::make_shared<SiteInfo>(info));
     	sitePoints.push_back(proteinPoints.at(info.atmIndex));
     }
-
+    // std::clog << " 3.1 >> ";
     for (int index : filteredPoints)
     {	
     	std::vector<Point_ptr> hydrogens(solventSites_.at(index).nbHydrogen);
@@ -549,17 +549,17 @@ void WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
     	siteInfos.push_back(std::make_shared<SiteInfo>(solventSites_.at(index)));
     	sitePoints.push_back(solventPoints.at(3*index));
     }
-    
+    // std::clog << " 3.2 >> ";
     int num_sites = sitePoints.size();
 
     auto stop3 = std::chrono::high_resolution_clock::now();
-    
+    // std::clog << " 4 >> ";
     // /* Find Edges *///////////////////////////////////////////////////////////////////
 
     std::vector<std::pair<int, int>> pairs = mp_->find(sitePoints);
     
     auto stop4 = std::chrono::high_resolution_clock::now();
-
+    // std::clog << " 5 >> ";
     // /* Find Hydrogen Bonds *//////////////////////////////////////////////////////////
     //TODO Make this function async
 
@@ -612,7 +612,7 @@ void WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
     int num_edges = edges.size();
 
     auto stop5= std::chrono::high_resolution_clock::now();
-
+    // std::clog << " 6 >> ";
     // /* Write Graph *///////////////////////////////////////////////////////////////////
     
     outputStream_ << "#--- frame " << frnr << " ---\n";

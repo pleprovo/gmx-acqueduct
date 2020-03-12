@@ -6,7 +6,7 @@
 class DelaunayFindPairs : public FindPairs
 {
 public:
-    std::vector<std::pair<int, int>> find(std::vector<Point>& points) override;
+  virtual std::vector<std::pair<int, int>> find(std::vector<Point>& points) override;
 };
 
 #endif

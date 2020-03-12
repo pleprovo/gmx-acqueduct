@@ -1,10 +1,12 @@
 
+import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
 from matplotlib import cm
-import numpy as np
 from itertools import combinations
-
+from math import factorial, ceil
+import multiprocessing
+from joblib import Parallel, delayed
 
 def filter_edge_by_weight(G, threshold=-1):
     g2 = G.copy()
@@ -50,25 +52,18 @@ def read_node_list(infile):
         nodes[int(line[0])] = "{} {} {}".format(line[2].strip(), \
                                                 line[3].strip(), \
                                                 line[4].strip())
-    print('Read {} Graph nodes'.format(len(nodes)))
+    print('Read {} Graph nodes.'.format(len(nodes)))
     return nodes
-
-def analyze_subgraph(g, n):
-    sub = nx.subgraph(g, \
-                      nx.node_connected_component(g, n))
-    p = nx.current_flow_betweenness_centrality(sub,normalized=False,weight='weight')
-    avg = nx.global_efficiency(sub)
-    return sub, avg, len(sub), p[n]
 
 if __name__ == "__main__":
     
     print('NetworkX Version : {}'.format(nx.__version__))
     
     frames = None
+    subgraphs = []
     sizes = []
     current_flow_betweenness_centrality = []
     global_efficiency = []
-    subgraphs = []
     nodes = None
     
     with open('node_list.txt', 'r') as infile:
@@ -88,79 +83,162 @@ if __name__ == "__main__":
                     if n in G:
                         sub = nx.subgraph(G, nx.node_connected_component(G, n))
                         nx.set_node_attributes(sub, name='label', values=nodes)
-                        subgraphs.append(sub)
-                         
-                        p = nx.current_flow_betweenness_centrality(sub,\
-                                                                   normalized=False,\
-                                                                   weight='weight')
+                        p = nx.current_flow_betweenness_centrality(sub, \
+                                                   normalized=False, weight='weight')
                         sizes.append(len(sub))
                         current_flow_betweenness_centrality.append(p[n])
-                        global_efficiency.append(nx.global_efficiency(sub))
+                        global_efficiency.append(nx.global_efficiency(sub))  
+                        subgraphs.append(sub)
                 G = nx.Graph() # Reset
-                print('{} frames read found {} networks... '.format(current, len(subgraphs)), end='\r')
+                print('{} frames read ...'.format(current, len(subgraphs)), end='\r')
                 continue
-            # if len(subgraphs) > 100:
+            # if len(subgraphs) >= 250:
             #     break
-            if current == -1:
+            if current == 1000:
                 break
             
             line = line.split()
             G.add_edge(int(line[0]), int(line[1]), \
                        weight=abs(float(line[2])), \
                        length=float(line[3]), angle=float(line[4]))
-            
-    print('\nfound {} networks'.format(len(subgraphs)))
+        print('{} frames read.'.format(current))
+        
+    print('{} network found.'.format(len(subgraphs)))
     
     ids = range(len(subgraphs))
     count = 0
+    num_comb = factorial(len(ids))/(factorial(2)*factorial(len(ids)-2))
+    
     iso_pairs = []
-    combs = len(combinations(ids, 2))
+    print('0% combinations done ...', end='\r')
     for i, j in combinations(ids, 2):
         count += 1
-        if (count % combs/10) == 0:
-            print('{} done'.format(int(count/combs*100)), end='\r')
-        if nx.is_isomorphic(subgraphs[i], subgraphs[j]):
+        if (count % int(num_comb/100)) == 0:
+            print('{}% combinations done ...'.format(ceil(count/num_comb*100)), end='\r')
+        if nx.is_isomorphic(subgraphs[i], subgraphs[i]):
             iso_pairs.append((i, j))
-    
+            
+    print('{} combinations done.'.format(count))
     iso_graph = nx.from_edgelist(iso_pairs)
-    
-    # for c in nx.connected_components(iso_graph):
-    #    print(c)
-    iso_cluster = []
+
+    cluster_sizes = []
+    iso_efficiency = []
     iso_sizes = []
+    iso_centrality = []
+    count = 0
     for c in nx.connected_components(iso_graph):
-        avg = 0
-        for i in c:
-            avg += sizes[i]
-        avg /= len(c)
-        iso_cluster.append(len(c))
-        iso_sizes.append(avg)
-    
-    plt.scatter(iso_sizes, iso_cluster)
-    plt.xlabel('sizes')
-    plt.ylabel('cluster')
-    # nx.draw(iso_graph, with_labels=True)
-    
-    # id_max = np.argmax(sizes)
-    # id_min = np.argmin(sizes)
-    # print_graph(subgraphs[id_max], 'test.png')
+        count += 1
+        print('{} components done ...'.format(count), end='\r')
+        cluster_sizes.append(len(c))
+        size = 0
+        efficiency = 0
+        centrality = 0
+        for elem in c:
+            size += sizes[elem]
+            centrality += current_flow_betweenness_centrality[elem]
+            efficiency += global_efficiency[elem]
+        iso_sizes.append(size/cluster_sizes[-1])
+        iso_efficiency.append(efficiency/cluster_sizes[-1])        
+        iso_centrality.append(centrality/cluster_sizes[-1])
 
-    # fig1, ax1 = plt.subplots()
-    # h1 = ax1.scatter(sizes, global_efficiency, c=current_flow_betweenness_centrality, \
-    #                  s=100, edgecolor='') 
-    # ax1.set_xlabel('sizes')
-    # ax1.set_ylabel('global efficiency')
+    figs = []
+    axes = []
+    handle = []
 
-    # fig2, ax2 = plt.subplots()
-    # h2 = ax2.scatter(sizes, current_flow_betweenness_centrality, s=100, edgecolor='') 
-    # ax2.set_xlabel('sizes')
-    # ax2.set_ylabel('centrality')
+    fig, ax = plt.subplots()
+    h = ax.hist(sizes, bins=50)
+    ax.set_xlabel('Sizes')
+    ax.set_ylabel('Count')
+    ax.set_title('Distribution of Networks Sizes')
+    figs.append(fig)
+    axes.append(ax)
+    handle.append(h)
+
+    fig, ax = plt.subplots()
+    h = ax.hist(current_flow_betweenness_centrality, bins=50)
+    ax.set_xlabel('Centrality')
+    ax.set_ylabel('Count')
+    ax.set_title('Distribution of Networks Centrality')
+    figs.append(fig)
+    axes.append(ax)
+    handle.append(h)
+
+    fig, ax = plt.subplots()
+    h = ax.hist(global_efficiency, bins=50)
+    ax.set_xlabel('Efficiency')
+    ax.set_ylabel('Count')
+    ax.set_title('Distribution of Networks Efficiency')
+    figs.append(fig)
+    axes.append(ax)
+    handle.append(h)
     
-    # fig3, ax3 = plt.subplots()
-    # h3 = ax3.scatter(global_efficiency, current_flow_betweenness_centrality, \
-    #                  s=100, edgecolor='') 
-    # ax3.set_xlabel('avgs')
-    # ax3.set_ylabel('centrality')
+    fig, ax = plt.subplots()
+    h = ax.scatter(iso_centrality, iso_efficiency, \
+                   c=iso_sizes, \
+                   s=cluster_sizes, \
+                   alpha=0.5)
+    plt.colorbar(h)
+    ax.set_xlabel('cluster sizes')
+    ax.set_ylabel('Average Network Size')
+    ax.set_title('Centratility on Sizes')
+    figs.append(fig)
+    axes.append(ax)
+    handle.append(h)
+
+    # fig, ax = plt.subplots()
+    # h = ax.scatter(cluster_sizes, iso_sizes, \
+    #                  c=iso_efficiency, \
+    #                  s=100)
+    # plt.colorbar(h)
+    # ax.set_xlabel('cluster sizes')
+    # ax.set_ylabel('Average Network Size')
+    # ax.set_title('Efficiency on Sizes')
+    # figs.append(fig)
+    # axes.append(ax)
+    # handle.append(h)
+    
+    # fig, ax = plt.subplots()
+    # h = ax.scatter(iso_centrality, iso_efficiency, \
+    #                  c=iso_sizes, \
+    #                  s=100)
+    # plt.colorbar(h)
+    # ax.set_xlabel('Centrality')
+    # ax.set_ylabel('Efficiency')
+    # ax.set_title('Sizes on measures')
+    # figs.append(fig)
+    # axes.append(ax)
+    # handle.append(h)
+
+    # fig, ax = plt.subplots()
+    # h = ax.scatter(sizes, global_efficiency, \
+    #                  c=current_flow_betweenness_centrality, \
+    #                  s=100) 
+    # ax.set_xlabel('sizes')
+    # ax.set_ylabel('global efficiency')
+    # ax.set_title('Centrality on sizes')
+    # figs.append(fig)
+    # axes.append(ax)
+    # handle.append(h)
+    
+    # fig, ax = plt.subplots()
+    # h = ax.scatter(sizes, current_flow_betweenness_centrality, \
+    #                  c=global_efficiency, \
+    #                  s=100) 
+    # ax.set_xlabel('sizes')
+    # ax.set_ylabel('centrality')
+    # ax.set_title('Efficiency on sizes')
+    # figs.append(fig)
+    # axes.append(ax)
+    # handle.append(h)
+    
+    # fig, ax = plt.subplots()
+    # h = ax.scatter(global_efficiency, current_flow_betweenness_centrality, \
+    #                  c=sizes, s=100) 
+    # ax.set_xlabel('avgs')
+    # ax.set_ylabel('centrality')
+    # figs.append(fig)
+    # axes.append(ax)
+    # handle.append(h)
     
     plt.show()
     

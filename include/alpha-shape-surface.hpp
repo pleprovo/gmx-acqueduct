@@ -6,11 +6,11 @@
 class AlphaShapeSurface : public Surface
 {
 public:
-    void make(std::vector<Point>& points) override;
-    float area() override;
-    float volume() override;
-    int locate(const std::vector<Point>& positions,
-	       std::vector<int>& locatedPositions) override;
+    virtual void make(std::vector<Point>& points) override;
+    virtual float area() override;
+    virtual float volume() override;
+    virtual int locate(const std::vector<Point>& positions,
+		       std::vector<int>& locatedPositions) override;
     
     void setAlphaValue(float alpha);
 

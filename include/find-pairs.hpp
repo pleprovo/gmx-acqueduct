@@ -8,7 +8,7 @@
 class FindPairs
 {
 public:  
-    virtual std::vector<std::pair<int, int>> find(std::vector<Point>& points) = 0;
+  virtual std::vector<std::pair<int, int>> find(std::vector<Point>& points) = 0;
 
 };
 
