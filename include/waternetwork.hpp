@@ -71,8 +71,10 @@ public:
 private:
     class ModuleData;
     
-    std::string fnFilter_;
-    std::string fnGraph_;
+    std::string fnBuried_;
+    std::string fnHydroBond_;
+    std::string fnNodes_;
+    std::string fnEdges_;
     
     double alphaValue_;
     
@@ -86,8 +88,8 @@ private:
     gmx::Selection alphaSel_;
     gmx::Selection proteinSel_;
     
-    gmx::AnalysisData filterData_; 
-    gmx::AnalysisData graphData_;
+    gmx::AnalysisData buriedData_; 
+    gmx::AnalysisData hydroBondData_;
 
     std::shared_ptr<DelaunayFindPairs> mp_;
     std::shared_ptr<AlphaShapeSurface> as_;
@@ -97,7 +99,6 @@ private:
 
     std::ofstream outputStream_;
     
-    //! Topology
     const gmx::TopologyInformation *top_;
 };
 

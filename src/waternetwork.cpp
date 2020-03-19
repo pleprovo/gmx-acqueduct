@@ -1,6 +1,5 @@
 #define _USE_MATH_DEFINES
 
-
 #include "waternetwork.hpp"
 #include "gromacs/pbcutil/pbc.h"
 #include "gromacs/trajectoryanalysis/topologyinformation.h"
@@ -14,13 +13,17 @@ double switch_function_radius(const double r, const double r_on, const double r_
 {
     double sw = 0.0;
 		
-    if ( r_off > r && r > r_on ) {
+    if ( r_off > r && r > r_on )
+    {
 	sw = pow(pow(r,2)-pow(r_off,2),2);
 	sw *= pow(r_off,2)+2*pow(r,2)-3*pow(r_on,2);
 	sw /= pow(pow(r_off,2)-pow(r_on,2),3);	
-    } else if ( r < r_on ) {
+    }
+    else if ( r < r_on )
+    {
 	sw = 1.0;
     }
+    
     return sw;
 }
 
@@ -28,14 +31,18 @@ double switch_function_angle(const double a, const double a_on, const double a_o
 {
     double sw = 0.0;
 		
-    if ( a_off < a && a < a_on ) {
+    if ( a_off < a && a < a_on )
+    {
 	sw = pow(pow(a,2)-pow(a_off,2),2);
 	sw *= pow(a_off,2)+2*pow(a,2)-3*pow(a_on,2);
 	sw /= pow(pow(a_off,2)-pow(a_on,2),3);
 	sw *= -1.0;
-    } else if ( a > a_on ) {
+    }
+    else if ( a > a_on )
+    {
 	sw = 1.0;
     }
+    
     return sw;
 }
 
@@ -89,7 +96,8 @@ int makeSites(gmx::Selection &selection,
 	      const gmx::TopologyInformation *top,
 	      std::vector<SiteInfo> &sites)
 {
-    std::set<std::string> atomNames {
+    std::set<std::string> atomNames
+    {
 	"OW",  /* WAT 2H */	
 	    "O",   /* BCK 0H */
 	    "N",   /* BCK 1H */
@@ -106,7 +114,8 @@ int makeSites(gmx::Selection &selection,
 	    "NH1", /* ARG 2H */
 	    "NH2", /* ARG 2H */
 	    "ND1", /* HIS 1H */
-	    "NE2", /* HIS 1H */};
+	    "NE2", /* HIS 1H */
+	    };
     
     std::map<std::string, SiteType> siteType;
     siteType["NE"] = DONOR; /* NE */
@@ -258,36 +267,38 @@ std::vector<HydrogenBond> make_edges(const std::vector<std::pair<int, int>>::ite
 // 			const std::vector<std::vector<Point_ptr>>& hydrogens,
 // 			const std::vector<SiteInfo_ptr>& sites)
 // {
-//     /* Make chunks */
-//     int n = std::thread::hardware_concurrency();
-//     int chunk_size = pairs.size() / n;
-
-//     /* Make Futures */
+//     Make chunks
+//     unsigned int n = std::thread::hardware_concurrency();
+//     int chunksize = pairs.size() / n;
+//     std::vector<std::pair<int, int>> chunks;
+//     int start = 0;
+//     for ( unsigned int k = 0; k < n; k++ )
+//     {
+// 	int last = start + chunksize;
+// 	if ( pairs.size() % n < k )
+// 	{
+// 	    last -=1;
+// 	}
+// 	chunks.push_back(std::pair<int, int>(start, last));
+// 	start = last;
+//     }
+//     chunks.back().second = pairs.size();
+    
+//     Make Futures
 //     std::vector< std::future< std::vector< HydrogenBond> > > futures;
-
-//     /* Launch Futures */
-//     for ( int k = 0; k < n-1; k++ )
+//     for ( auto& chunk : chunks )
 //     {
 //     	futures.push_back(std::async(std::launch::async,
 //     				     make_edges,
 //     				     std::ref(nodes),
-//     				     chunk_size*k,
-//     				     chunk_size*(k+1)));
-//     }
-    
-//     edges = make_edges(nodes, chunk_size*(n-1), nodes.size());
-
-//     /* Await results */
-//     for ( std::future< std::vector<int> >& fut : futures )
-//     {
-//     	fut.wait();
+//     				     chunk.first,
+//     				     chunk.second));
 //     }
 
-//     /* Get result */
-//     for ( std::future< std::vector<int>>& fut : futures )
+//     Get result
+//     for ( auto& fut : futures )
 //     {
-// 	fut.wait();
-//     	std::vector< HydrogenBond  >chunk = fut.get();
+//     	std::vector< HydrogenBond> chunk = fut.get();
 //     	edges.insert(edges.end(),
 //     			std::make_move_iterator(chunk.begin()),
 //     			std::make_move_iterator(chunk.end()));
@@ -304,8 +315,8 @@ WaterNetwork::WaterNetwork() : alphaValue_(0.65),
 			       angleOff_(0.0301),
 			       top_(nullptr)
 {
-    registerAnalysisDataset(&filterData_, "filter");
-    registerAnalysisDataset(&graphData_, "graph");
+    registerAnalysisDataset(&buriedData_, "filter");
+    registerAnalysisDataset(&hydroBondData_, "graph");
 }
 
 
@@ -329,13 +340,21 @@ void WaterNetwork::initOptions(gmx::IOptionsContainer          *options,
 
     settings->setHelpText(desc);
 
-    options->addOption(gmx::FileNameOption("o").filetype(gmx::eftPlot).outputFile()
-		       .store(&fnFilter_).defaultBasename("filter")
-		       .description("Collection of analysis properties through time"));
+    options->addOption(gmx::FileNameOption("obw").filetype(gmx::eftPlot).outputFile()
+		       .store(&fnBuried_).defaultBasename("buried-waters-num")
+		       .description("Number of water molecules found within the alpha shape over time."));
 
-    options->addOption(gmx::FileNameOption("og").filetype(gmx::eftPlot).outputFile()
-		       .store(&fnGraph_).defaultBasename("graph")
-		       .description("Collection of analysis properties through time"));
+    options->addOption(gmx::FileNameOption("ohb").filetype(gmx::eftPlot).outputFile()
+		       .store(&fnHydroBond_).defaultBasename("hydrogen-bonds-num")
+		       .description("Collection of analysis properties through time."));
+
+    options->addOption(gmx::FileNameOption("nodes").filetype(gmx::eftPlot).outputFile()
+		       .store(&fnNodes_).defaultBasename("nodes-list")
+		       .description("List of the nodes, being the acceptors and donor of the system"));
+
+    options->addOption(gmx::FileNameOption("edges").filetype(gmx::eftPlot).outputFile()
+		       .store(&fnEdges_).defaultBasename("edges-frames")
+		       .description("List of edges (Hydrogen bonds) found in every frame of the trajectory."));
     
     options->addOption(gmx::SelectionOption("select").store(&solventSel_).required()
 		       .defaultSelectionText("Water")
@@ -405,88 +424,93 @@ void WaterNetwork::initAnalysis(const gmx::TrajectoryAnalysisSettings &settings,
     	}
     }   
 
-    
-    
-    outputStream_.open("node_list.txt");
-    outputStream_ << std::setw(7) << "#Id" 
-		  << std::setw(7) << "AtmId" 
-		  << std::setw(7) << "Name" 
-		  << std::setw(7) << "ResId" 
-		  << std::setw(7) << "Res" 
-		  << std::setw(7) << "Type" 
-		  << std::setw(7) << "Hyd\n";
-    outputStream_.flush();
-    for ( SiteInfo& site : proteinSites_ )
-    {
-	outputStream_ << site;
-    }
-    for ( SiteInfo& site : solventSites_ )
-    {
-	outputStream_ << site;
-    }
-    
-    outputStream_.close();
-    
     std::clog << "Total number of sites : "
 	      << proteinSites_.size()+solventSites_.size() << std::endl;
     
     /* Set the number of column to store time dependent data */
-    filterData_.setColumnCount(0, 2); 
-    graphData_.setColumnCount(0, 6);
+    buriedData_.setColumnCount(0, 2); 
+    hydroBondData_.setColumnCount(0, 6);
 
     /* Init the Plot module for the time dependent data */
     /* Solvent filtering data */
-    if (!fnFilter_.empty())
+    if (!fnBuried_.empty())
     {
 	gmx::AnalysisDataPlotModulePointer plotm(
 	    new gmx::AnalysisDataPlotModule(settings.plotSettings()));
-        plotm->setFileName(fnFilter_);
+        plotm->setFileName(fnBuried_);
         plotm->setTitle("Filter Statistics");
         plotm->setXAxisIsTime();
         plotm->setYLabel("#");
-        filterData_.addModule(plotm);
+        buriedData_.addModule(plotm);
     }
 
     /* Init the Plot module for the time dependent data */
     /* Network Data */
-    if (!fnGraph_.empty())
+    if (!fnHydroBond_.empty())
     {
 	gmx::AnalysisDataPlotModulePointer plotm(
 	    new gmx::AnalysisDataPlotModule(settings.plotSettings()));
-        plotm->setFileName(fnGraph_);
+        plotm->setFileName(fnHydroBond_);
         plotm->setTitle("Graph Statistics");
         plotm->setXAxisIsTime();
         plotm->setYLabel("#");
-        graphData_.addModule(plotm);
+        hydroBondData_.addModule(plotm);
     }
 
-    // Edge list file open
-    outputStream_.open("edge_list.txt");
-    outputStream_ << std::fixed << std::setprecision(4);
-    outputStream_ << std::setw(6) << "#Id"
-		  << std::setw(8) << "AtmId"
-		  << std::setw(6) << "ResId"
-		  << std::setw(6) << "Id"
-		  << std::setw(8) << "AtmId"
-		  << std::setw(6) << "ResId"
-		  << std::setw(8) << "Energy"
-		  << std::setw(8) << "Length"
-		  << std::setw(8) << "Cos\n";
-    outputStream_.flush();
+    /* Write Nodes to file */
+    if ( !fnNodes_.empty() )
+    {
+	outputStream_.open(fnNodes_+".dat");
+	outputStream_ << std::setw(7) << "#Id" 
+		      << std::setw(7) << "AtmId" 
+		      << std::setw(7) << "Name" 
+		      << std::setw(7) << "ResId" 
+		      << std::setw(7) << "Res" 
+		      << std::setw(7) << "Type" 
+		      << std::setw(7) << "Hyd\n";
+	outputStream_.flush();
+	for ( SiteInfo& site : proteinSites_ )
+	{
+	    outputStream_ << site;
+	}
+	for ( SiteInfo& site : solventSites_ )
+	{
+	    outputStream_ << site;
+	}
+    
+	outputStream_.close();
+    }
+    
+    /* Write Edges Header to file */
+    if ( !fnEdges_.empty() )
+    {
+	outputStream_.open(fnEdges_+".dat");
+	outputStream_ << std::fixed << std::setprecision(4);
+	outputStream_ << std::setw(6) << "#Id"
+		      << std::setw(8) << "AtmId"
+		      << std::setw(6) << "ResId"
+		      << std::setw(6) << "Id"
+		      << std::setw(8) << "AtmId"
+		      << std::setw(6) << "ResId"
+		      << std::setw(8) << "Energy"
+		      << std::setw(8) << "Length"
+		      << std::setw(8) << "Cos\n";
+	outputStream_.flush();
+    }
 }
 
 
 void WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
 				gmx::TrajectoryAnalysisModuleData *pdata)
 {
-    gmx::AnalysisDataHandle filterData = pdata->dataHandle(filterData_);
-    gmx::AnalysisDataHandle graphData = pdata->dataHandle(graphData_);
+    gmx::AnalysisDataHandle buriedData = pdata->dataHandle(buriedData_);
+    gmx::AnalysisDataHandle hydroBondData = pdata->dataHandle(hydroBondData_);
     
     const gmx::Selection &proteinsel = pdata->parallelSelection(proteinSel_);
     const gmx::Selection &solventsel = pdata->parallelSelection(solventSel_);
     const gmx::Selection &alphasel = pdata->parallelSelection(alphaSel_);
 
-    auto start = std::chrono::high_resolution_clock::now();
+    // auto start = std::chrono::high_resolution_clock::now();
     // std::clog << " >> ";
     /* Convert positions from gromacs rvec to cgal point *///////////////////////////
     std::vector<Point> alphaPoints
@@ -498,17 +522,17 @@ void WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
     std::vector<Point> oxygenPoints
 	= fromGmxtoCgalPosition<Point>(solventsel.coordinates(), 3);
     
-    auto stop0 = std::chrono::high_resolution_clock::now(); 
+    // auto stop0 = std::chrono::high_resolution_clock::now(); 
     // std::clog << " 1 >> ";
     /* Filter Solvent Sites *////////////////////////////////////////////////////////
     std::vector<int> filteredPoints;
     as_->make(alphaPoints);
     
-    auto stop1 = std::chrono::high_resolution_clock::now();
+    // auto stop1 = std::chrono::high_resolution_clock::now();
     // std::clog << " 2 >> ";
     int num_filtered = as_->locate(oxygenPoints, filteredPoints);
     
-    auto stop2 = std::chrono::high_resolution_clock::now();
+    // auto stop2 = std::chrono::high_resolution_clock::now();
     // std::clog << " 3 >> ";
     /* Make Nodes *////////////////////////////////////////////////////////////////
     std::vector<Point> sitePoints;
@@ -552,50 +576,52 @@ void WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
     // std::clog << " 3.2 >> ";
     int num_sites = sitePoints.size();
 
-    auto stop3 = std::chrono::high_resolution_clock::now();
+    // auto stop3 = std::chrono::high_resolution_clock::now();
     // std::clog << " 4 >> ";
     // /* Find Edges *///////////////////////////////////////////////////////////////////
 
     std::vector<std::pair<int, int>> pairs = mp_->find(sitePoints);
     
-    auto stop4 = std::chrono::high_resolution_clock::now();
+    // auto stop4 = std::chrono::high_resolution_clock::now();
     // std::clog << " 5 >> ";
     // /* Find Hydrogen Bonds *//////////////////////////////////////////////////////////
     //TODO Make this function async
 
     /* Make chunks */
-    int n = std::thread::hardware_concurrency();
+    unsigned int n = std::thread::hardware_concurrency();
     int chunksize = pairs.size() / n;
-    // std::cout << " Concurrency " << n << " chunksize " << chunksize << std::endl;
+    std::vector<std::pair<int, int>> chunks;
+    int start = 0;
+    for (unsigned int k = 0; k < n; k++ )
+    {
+    	int last = start + chunksize;
+    	if ( pairs.size() % n < k )
+    	{
+    	    last -= 1;
+    	}
+    	chunks.push_back(std::pair<int, int>(start, last));
+    	start = last;
+    }
+    chunks.back().second = pairs.size(); // Make sure the last chunk goes to the end of the list
+    
     /* Make Futures */
     std::vector<std::future<std::vector<HydrogenBond>>> futures;
-
-    /* Launch Futures */
-    for ( int k = 0; k < n-1; k++ )
+    for ( auto& chunk : chunks )
     {
     	futures.push_back(std::async(std::launch::async,
     				     std::ref(make_edges),
-    				     pairs.begin()+chunksize*k,
-    				     pairs.begin()+chunksize*(k+1),
+    				     pairs.begin()+chunk.first,
+    				     pairs.begin()+chunk.second,
     				     std::ref(sitePoints),
     				     std::ref(hydrogenPoints),
     				     std::ref(siteInfos)));
     }
-    
-    futures.push_back(std::async(std::launch::async,
-				 std::ref(make_edges),
-				 pairs.begin()+chunksize*(n-1),
-				 pairs.end(),
-				 std::ref(sitePoints),
-				 std::ref(hydrogenPoints),
-				 std::ref(siteInfos)));
 
     /* Get result */
     std::vector<std::vector<HydrogenBond>> results;
     for ( auto &fut : futures )
     {
 	results.push_back(fut.get());
-    	// std::vector<HydrogenBond> chunk = fut.get();
     }
     
     std::vector<HydrogenBond> edges;
@@ -606,59 +632,48 @@ void WaterNetwork::analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
     		     std::make_move_iterator(chunk.end()));
     }
     
-    // std::vector<HydrogenBond> edges = make_edges(pairs.begin(), pairs.end(), sitePoints,
-    // 						 hydrogenPoints, siteInfos);
-    
     int num_edges = edges.size();
 
-    auto stop5= std::chrono::high_resolution_clock::now();
-    // std::clog << " 6 >> ";
-    // /* Write Graph *///////////////////////////////////////////////////////////////////
-    
-    outputStream_ << "#--- frame " << frnr << " ---\n";
-    for (unsigned int i = 0; i < edges.size(); i++)
+    /* Write Graph *///////////////////////////////////////////////////////////////////
+    if ( !fnEdges_.empty() )
     {
-    	outputStream_ << std::setw(6) << edges.at(i).sites.first->id
-    		      << std::setw(6) << edges.at(i).sites.second->id
-    		      << std::setw(8) << edges.at(i).energy
-    		      << std::setw(8) << edges.at(i).length
-    		      << std::setw(8) << edges.at(i).angle
-    		      << "\n";
+	outputStream_ << "#--- frame " << frnr << " ---\n";
+	for (unsigned int i = 0; i < edges.size(); i++)
+	{
+	    outputStream_ << std::setw(6) << edges.at(i).sites.first->id
+			  << std::setw(6) << edges.at(i).sites.second->id
+			  << std::setw(8) << edges.at(i).energy
+			  << std::setw(8) << edges.at(i).length
+			  << std::setw(8) << edges.at(i).angle
+			  << "\n";
 	
+	}
+	outputStream_.flush();
     }
-    outputStream_.flush();
-
-    auto total = std::chrono::duration_cast<std::chrono::milliseconds>(stop4 - start); 
-    auto convert = std::chrono::duration_cast<std::chrono::milliseconds>(stop0 - start);
-    auto alpha = std::chrono::duration_cast<std::chrono::milliseconds>(stop1 - stop0);
-    auto locate = std::chrono::duration_cast<std::chrono::milliseconds>(stop2 - stop1); 
-    auto connect = std::chrono::duration_cast<std::chrono::milliseconds>(stop3 - stop2);
-    auto energy = std::chrono::duration_cast<std::chrono::milliseconds>(stop4 - stop3);
-    auto write = std::chrono::duration_cast<std::chrono::milliseconds>(stop5 - stop4);
     
-    filterData.startFrame(frnr, fr.time);
-    filterData.setPoint(0, num_filtered);
-    filterData.setPoint(1, 0.0/*cgal::getVolume(alphaShape)*/);
-    filterData.finishFrame();
+    buriedData.startFrame(frnr, fr.time);
+    buriedData.setPoint(0, num_filtered);
+    buriedData.setPoint(1, 0.0/*cgal::getVolume(alphaShape)*/);
+    buriedData.finishFrame();
     
-    graphData.startFrame(frnr, fr.time);
-    graphData.setPoint(0, 1.0*convert.count()/total.count()/*num_sites*/);  
-    graphData.setPoint(1, 1.0*alpha.count()/total.count()/*num_edges*/);
-    graphData.setPoint(2, 1.0*locate.count()/total.count()/*1.0*num_edges/num_sites*/);
-    graphData.setPoint(3, 1.0*connect.count()/total.count()/*0.0*/);
-    graphData.setPoint(4, 1.0*energy.count()/total.count()/*0.0*/);
-    graphData.setPoint(5, 1.0*write.count()/total.count()/*0.0*/);
-    graphData.finishFrame();
-
-    // std::cout << "Num_nodes = " << num_nodes << " Num_edges = " << num_edges << std::endl;
+    hydroBondData.startFrame(frnr, fr.time);
+    hydroBondData.setPoint(0, num_sites);  
+    hydroBondData.setPoint(1, num_edges);
+    hydroBondData.setPoint(2, 1.0*num_edges/num_sites);
+    hydroBondData.setPoint(3, 0.0);
+    hydroBondData.setPoint(4, 0.0);
+    hydroBondData.setPoint(5, 0.0);
+    hydroBondData.finishFrame();
 }
 
 
 void WaterNetwork::finishAnalysis(int /*nframes*/)
 {
-    outputStream_.close();
+    if ( !fnEdges_.empty() )
+    {
+	outputStream_.close();
+    }
 }
-
 
 void WaterNetwork::writeOutput()
 {

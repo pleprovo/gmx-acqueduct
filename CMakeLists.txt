@@ -40,7 +40,7 @@ list( APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake )
 # user explicitly sets what they want to get, and then need to provide a suffix
 # to match.
 option( GMX_DOUBLE "Use double precision" OFF )
-set( GMX_SUFFIX "_2019.5" CACHE STRING "Suffix for the GROMACS installation to use (empty for default)" )
+set( GMX_SUFFIX "_2019.4" CACHE STRING "Suffix for the GROMACS installation to use (empty for default)" )
 
 # This does not allow for a non-suffixed double-precision libgromacs, but
 # that should be rare enough for demonstration purposes.
@@ -50,7 +50,7 @@ else()
     set(GROMACS_SUFFIX ${GMX_SUFFIX})
 endif()
 
-find_package(GROMACS 2019.5 REQUIRED)
+find_package(GROMACS 2019.4 REQUIRED)
 gromacs_check_double(GMX_DOUBLE)
 gromacs_check_compiler(CXX)
 include_directories(${GROMACS_INCLUDE_DIRS})
