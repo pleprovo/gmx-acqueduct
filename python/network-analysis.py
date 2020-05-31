@@ -4,7 +4,7 @@ import networkx as nx
 import matplotlib.pyplot as plt
 from matplotlib import cm
 from itertools import combinations
-from math import factorial, ceil
+from math import factorial, ceil, log
 import multiprocessing
 from joblib import Parallel, delayed
 from sklearn.cluster import KMeans
@@ -64,14 +64,16 @@ def read_node_list(infile):
     Read Node information from file.
     """
     nodes = dict()
+    resis = dict()
     next(infile)
     for line in infile:
         line = line.split()
         nodes[int(line[0])] = "{} {} {}".format(line[2].strip(), \
                                                 line[3].strip(), \
                                                 line[4].strip())
+        resis['{} {}'.format(line[2].strip(), line[3].strip())] = int(line[0])
     print('Read {} Graph nodes.'.format(len(nodes)))
-    return nodes
+    return nodes, resis
 
 def isomorph_pair_graph(frames, method=nx.faster_could_be_isomorphic):
     """
@@ -135,9 +137,12 @@ def pca_frames(frames, features=['num_nodes', 'num_edges', \
 def main():
 
     nodes = None
+    residues = None
     with open('nodes-list.xvg.dat', 'r') as infile:
-        nodes = read_node_list(infile)
+        nodes, residues = read_node_list(infile)
 
+    print(residues['SG 374'], residues['SG 763'], residues['SG 1152'], residues['SG 1541'])
+        
     data = []
     with open('edges-frames.xvg.dat', 'r') as infile:
         next(infile)
@@ -148,25 +153,26 @@ def main():
                 current += 1
                 G = filter_edge_by_weight(G, threshold=0.0)
                 G = remove_node_degree(G)
-                for i, n in enumerate([959, 1950, 2941, 3932]):
-                    if n in G:
-                        sub = nx.subgraph(G, nx.node_connected_component(G, n))
+                for i, n in enumerate(['SG 374', 'SG 763', 'SG 1152', 'SG 1541']):
+                    id = residues[n]
+                    if id in G:
+                        sub = nx.subgraph(G, nx.node_connected_component(G, id))
                         nx.set_node_attributes(sub, name='label', values=nodes)
                         new_network = {'num_frames' : current, \
                                        'chain' : i, \
                                        'num_edges' : nx.number_of_edges(sub), \
                                        'num_nodes' : nx.number_of_nodes(sub), \
-                                       'centrality' : nx.current_flow_betweenness_centrality(sub, normalized=False, weight='weight')[n], \
+                                       'centrality' : nx.current_flow_betweenness_centrality(sub, normalized=False, weight='weight')[id], \
                                        'efficiency' : nx.global_efficiency(sub), \
                                        'clustering' : nx.average_clustering(sub), \
                                        'avg_connectivity' : nx.average_node_connectivity(sub), \
                                        'avg_shortest_path' : nx.average_shortest_path_length(sub), \
                                        'graph' : sub }
                         data.append(new_network)
-                G = nx.Graph()
-                print('{} frames read and {} networks found ...'.format(current, len(data)), end='\r')
+                        G = nx.Graph()
+                    print('{} frames read and {} networks found ...'.format(current, len(data)), end='\r')
                 continue
-            if len(data) >= 5000:
+            if len(data) >= 100:
                 break
             if current == -1:
                 break
@@ -200,34 +206,45 @@ def main():
     features = ['num_edges', 'num_nodes', 'centrality', 'clustering', 'efficiency', 'avg_connectivity', 'avg_shortest_path']
 
     finalDf = pca_frames(frames)
+
+    figs = []
+    axes = []
+    handle = []
     
     fig = plt.figure(figsize = (8,8))
     ax = fig.add_subplot(1,1,1) 
     ax.set_xlabel('Principal Component 1', fontsize = 15)
     ax.set_ylabel('Principal Component 2', fontsize = 15)
-    ax.set_title('2 Component PCA', fontsize = 20)
+    ax.set_title('2 Component PCA -', fontsize = 20)
 
-    ax.scatter(finalDf.loc[:, 'principal component 1'], \
-               finalDf.loc[:, 'principal component 2'], \
-               s = 50)
+    h = ax.scatter(finalDf.loc[:, 'principal component 1'], \
+                   finalDf.loc[:, 'principal component 2'], \
+                   s = 50)
     ax.grid()
-    plt.show()
+    figs.append(fig)
+    axes.append(ax)
+    handle.append(h)
+
+    fig, ax = plt.subplots()
+    h = ax.hist(frames.chain, bins=4)
+    ax.set_xlabel('Chains')
+    ax.set_ylabel('Count')
+    ax.set_title('Distribution of Number of Networks per Chain')
+    figs.append(fig)
+    axes.append(ax)
+    handle.append(h)
     
-    # figs = []
-    # axes = []
-    # handle = []
-    
-    # fig, ax = plt.subplots()
-    # h = ax.hist(sizes, bins=50)
-    # ax.set_xlabel('Sizes')
-    # ax.set_ylabel('Count')
-    # ax.set_title('Distribution of Networks Sizes')
-    # figs.append(fig)
-    # axes.append(ax)
-    # handle.append(h)
+    fig, ax = plt.subplots()
+    h = ax.hist(frames.num_edges, bins=50)
+    ax.set_xlabel('Sizes' )
+    ax.set_ylabel('Count')
+    ax.set_title('Distribution of Networks Sizes')
+    figs.append(fig)
+    axes.append(ax)
+    handle.append(h)
 
     # fig, ax = plt.subplots()
-    # h = ax.hist(current_flow_betweenness_centrality, bins=50)
+    # h = ax.hist(frames.centrality, bins=50)
     # ax.set_xlabel('Centrality')
     # ax.set_ylabel('Count')
     # ax.set_title('Distribution of Networks Centrality')
@@ -236,7 +253,7 @@ def main():
     # handle.append(h)
 
     # fig, ax = plt.subplots()
-    # h = ax.hist(global_efficiency, bins=50)
+    # h = ax.hist(frames.efficiency, bins=50)
     # ax.set_xlabel('Efficiency')
     # ax.set_ylabel('Count')
     # ax.set_title('Distribution of Networks Efficiency')
@@ -245,7 +262,7 @@ def main():
     # handle.append(h)
 
     # fig, ax = plt.subplots()
-    # h = ax.hist(average_clustering, bins=50)
+    # h = ax.hist(frames.clustering, bins=50)
     # ax.set_xlabel('Average Clustering ')
     # ax.set_ylabel('Count')
     # ax.set_title('Distribution of Network Average Clustering')
@@ -254,7 +271,7 @@ def main():
     # handle.append(h)
 
     # fig, ax = plt.subplots()
-    # h = ax.hist(average_node_connectivity, bins=50)
+    # h = ax.hist(frames.avg_connectivity, bins=50)
     # ax.set_xlabel('Average Node Connectivity')
     # ax.set_ylabel('Count')
     # ax.set_title('Distribution of Networks Average Node Connectivity')
@@ -263,7 +280,7 @@ def main():
     # handle.append(h)
 
     # fig, ax = plt.subplots()
-    # h = ax.hist(average_shortest_path_length, bins=50)
+    # h = ax.hist(frames.avg_shortest_path, bins=50)
     # ax.set_xlabel('Average Shortest Path Length')
     # ax.set_ylabel('Count')
     # ax.set_title('Distribution of Average Sortest Path Length')
@@ -271,47 +288,12 @@ def main():
     # axes.append(ax)
     # handle.append(h)
     
-    # fig, ax = plt.subplots()
-    # h = ax.scatter(iso_centrality, iso_efficiency, \
-    #                c=iso_sizes, \
-    #                s=cluster_sizes, \
-    #                alpha=0.5)
-    # plt.colorbar(h)
-    # ax.set_xlabel('cluster sizes')
-    # ax.set_ylabel('Average Network Size')
-    # ax.set_title('Centratility on Sizes')
-    # figs.append(fig)
-    # axes.append(ax)
-    # handle.append(h)
-
-    # fig, ax = plt.subplots()
-    # h = ax.scatter(cluster_sizes, iso_sizes, \
-    #                  c=iso_efficiency, \
-    #                  s=100)
-    # plt.colorbar(h)
-    # ax.set_xlabel('cluster sizes')
-    # ax.set_ylabel('Average Network Size')
-    # ax.set_title('Efficiency on Sizes')
-    # figs.append(fig)
-    # axes.append(ax)
-    # handle.append(h)
     
-    # fig, ax = plt.subplots()
-    # h = ax.scatter(iso_centrality, iso_efficiency, \
-    #                  c=iso_sizes, \
-    #                  s=100)
-    # plt.colorbar(h)
-    # ax.set_xlabel('Centrality')
-    # ax.set_ylabel('Efficiency')
-    # ax.set_title('Sizes on measures')
-    # figs.append(fig)
-    # axes.append(ax)
-    # handle.append(h)
 
     # fig, ax = plt.subplots()
-    # h = ax.scatter(sizes, global_efficiency, \
-    #                  c=current_flow_betweenness_centrality, \
-    #                  s=100) 
+    # h = ax.scatter(frames.num_nodes, frames.efficiency, \
+    #                c=frames.centrality, \
+    #                s=100) 
     # ax.set_xlabel('sizes')
     # ax.set_ylabel('global efficiency')
     # ax.set_title('Centrality on sizes')
@@ -320,8 +302,8 @@ def main():
     # handle.append(h)
     
     # fig, ax = plt.subplots()
-    # h = ax.scatter(sizes, current_flow_betweenness_centrality, \
-    #                  c=global_efficiency, \
+    # h = ax.scatter(frames.num_nodes, frames.centrality, \
+    #                  c=frames.efficiency, \
     #                  s=100) 
     # ax.set_xlabel('sizes')
     # ax.set_ylabel('centrality')
@@ -331,22 +313,26 @@ def main():
     # handle.append(h)
     
     # fig, ax = plt.subplots()
-    # h = ax.scatter(global_efficiency, current_flow_betweenness_centrality, \
-    #                  c=sizes, s=100) 
+    # h = ax.scatter(frames.efficiency, frames.centrality, \
+    #                c=frames.num_nodes, s=100) 
     # ax.set_xlabel('avgs')
     # ax.set_ylabel('centrality')
     # figs.append(fig)
     # axes.append(ax)
     # handle.append(h)
 
-    # fig, ax = plt.subplots()
-    # h = ax.plot(num_networks)
-    # ax.set_xlabel('frames')
-    # ax.set_ylabel('Number of networks detected')
-    # figs.append(fig)
-    # axes.append(ax)
-    # handle.append(h)
-
+    fig, ax = plt.subplots()
+    h = ax.scatter(avg_isomorph_components.centrality, avg_isomorph_components.efficiency, \
+                   s=log(avg_isomorph_components.size+1), \
+                   alpha=0.5)
+    plt.colorbar(h)
+    ax.set_xlabel('Centrality')
+    ax.set_ylabel('Efficiency')
+    ax.set_title('Centratility on Sizes')
+    figs.append(fig)
+    axes.append(ax)
+    handle.append(h)
+    
     # sizes_networks = np.array(sizes_networks).T
     # fig, ax = plt.subplots()
     # h1 = ax.plot(sizes_networks[0])
@@ -362,7 +348,7 @@ def main():
     # handle.append(h3)
     # handle.append(h4)
     
-    # plt.show()
+    plt.show()
 
 
     
