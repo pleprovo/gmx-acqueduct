@@ -33,60 +33,67 @@
  * the research papers on the package. Check out http://www.gromacs.org.
  */
 
+
+#ifndef ALPHASHAPE_HPP
+#define ALPHASHAPE_HPP
+
 #include <string>
 #include <vector>
 
-#include "alphashape/alpha_shape_module.hpp"
-#include "graph_module.hpp"
+#include "alpha-shape-surface.hpp"
 
+#include <gromacs/analysisdata/modules/lifetime.h> 
 #include <gromacs/trajectoryanalysis.h>
+
 
 
 /*! \brief
  * Template class to serve as a basis for user analysis tools.
  */
 
-class WaterNetwork : public gmx::TrajectoryAnalysisModule
+class AlphaShape : public gmx::TrajectoryAnalysisModule
 {
 public:
-    WaterNetwork();
+    AlphaShape();
 
-    virtual void initOptions(gmx::Options                    *options,
-			     gmx::TrajectoryAnalysisSettings *settings);
+    virtual void initOptions(gmx::IOptionsContainer          *options,
+			     gmx::TrajectoryAnalysisSettings *settings) override;
+    void optionsFinished(gmx::TrajectoryAnalysisSettings *settings) override;
     virtual void initAnalysis(const gmx::TrajectoryAnalysisSettings &settings,
-			      const gmx::TopologyInformation        &top);
+			      const gmx::TopologyInformation        &top) override;
 
     virtual void analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
-			      gmx::TrajectoryAnalysisModuleData *pdata);
-    virtual void finishAnalysis(int nframes);
-    virtual void writeOutput();
+			      gmx::TrajectoryAnalysisModuleData *pdata) override;
+
+    virtual void finishAnalysis(int nframes) override;
+    virtual void writeOutput() override;
 
 private:
     class ModuleData;
     
-    std::string fnDist_;
-    double cutoff_;
-    int nb_water_;
+    gmx::SelectionList               selectionListAlpha_;
+    gmx::Selection                   selectionWater_;
     
-    gmx::Selection solvent_;
-    gmx::Selection calpha_;
-    gmx::Selection source_;
-    gmx::Selection sink_;
-
-    std::vector<int> oxygenIndices_;
-
-    gmx::AnalysisNeighborhood nb1_;
-    gmx::AnalysisNeighborhood nb2_;
+    std::string                      filenameWater_;
+    std::string                      filenameVolume_;
+    std::string                      filenameLifetime_;
+    std::string                      filenameStats_;
     
-    gmx::AnalysisData data_; 
+    double                           alphaValue_;
+    double                           numFrameValue_;
     
-    gmx::AnalysisDataAverageModulePointer avem_;
+    gmx::AnalysisData                waterData_;
+    gmx::AnalysisData                volumeData_;
 
-    std::shared_ptr<AlphaShapeModule> alphaShapeModulePtr_;
-    std::shared_ptr<GraphModule> graphModulePtr_;
+    std::shared_ptr<AlphaShapeSurface> as_;
+    
+    gmx::AnalysisData                lifetimeData_;
+    gmx::AnalysisDataLifetimeModulePointer  lifetimeModule_;
+
+    const gmx::TopologyInformation  *top_;
 };
 
-
+#endif 
 
 
 

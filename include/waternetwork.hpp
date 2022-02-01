@@ -33,52 +33,76 @@
  * the research papers on the package. Check out http://www.gromacs.org.
  */
 
+#ifndef WATERNETWORK_HPP
+#define WATERNETWORK_HPP
+
 #include <string>
 #include <vector>
+#include <fstream>
 
-#include "alpha_shape_module.hpp"
+// #include "cgal.hpp"
+#include "alpha-shape-surface.hpp"
+#include "brute-find-pairs.hpp"
+#include "delaunay-find-pairs.hpp"
+#include "calculate-hydrogen-bond-energy.hpp"
 
 #include <gromacs/trajectoryanalysis.h>
-
 
 /*! \brief
  * Template class to serve as a basis for user analysis tools.
  */
 
-class AlphaShape : public gmx::TrajectoryAnalysisModule
+class WaterNetwork : public gmx::TrajectoryAnalysisModule
 {
 public:
-    AlphaShape();
+    WaterNetwork();
 
-    virtual void initOptions(gmx::Options                    *options,
-			     gmx::TrajectoryAnalysisSettings *settings);
+    virtual void initOptions(gmx::IOptionsContainer          *options,
+			     gmx::TrajectoryAnalysisSettings *settings) override;
+    void optionsFinished(gmx::TrajectoryAnalysisSettings *settings) override;
     virtual void initAnalysis(const gmx::TrajectoryAnalysisSettings &settings,
-			      const gmx::TopologyInformation        &top);
+			      const gmx::TopologyInformation        &top) override;
 
     virtual void analyzeFrame(int frnr, const t_trxframe &fr, t_pbc *pbc,
-			      gmx::TrajectoryAnalysisModuleData *pdata);
-
-    virtual void finishAnalysis(int nframes);
-    virtual void writeOutput();
+			      gmx::TrajectoryAnalysisModuleData *pdata) override;
+    virtual void finishAnalysis(int nframes) override;
+    virtual void writeOutput() override;
 
 private:
     class ModuleData;
     
-    std::string                      fnPopulation_;
-    std::string                      fnSurface_ = "surface.off";
+    std::string fnBuried_;
+    std::string fnHydroBond_;
+    std::string fnNodes_;
+    std::string fnEdges_;
     
-    gmx::Selection                   alphasel_;
-    gmx::Selection                   watersel_;
+    double alphaValue_;
     
-    gmx::AnalysisData                     data_;
-    gmx::AnalysisDataAverageModulePointer avem_;
+    double lengthOn_;
+    double lengthOff_;
+    
+    double angleOn_;
+    double angleOff_;
+    
+    gmx::Selection solventSel_;
+    gmx::Selection alphaSel_;
+    gmx::Selection proteinSel_;
+    
+    gmx::AnalysisData buriedData_; 
+    gmx::AnalysisData hydroBondData_;
 
-    // Customs Modules
-    std::shared_ptr<AlphaShapeModule> alphaShapeModulePtr_;
+    std::shared_ptr<DelaunayFindPairs> mp_;
+    std::shared_ptr<AlphaShapeSurface> as_;
+    
+    std::vector<SiteInfo> solventSites_;
+    std::vector<SiteInfo> proteinSites_;
 
+    std::ofstream outputStream_;
+    
+    const gmx::TopologyInformation *top_;
 };
 
-
+#endif
 
 
 
